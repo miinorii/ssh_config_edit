@@ -1,7 +1,6 @@
-use std::error::Error;
-use std::fs;
-use std::collections::HashMap;
-use crate::tokenizer::{lexer::Lexer, types::{Token, TokenKind}};
+use crate::lexer::{Lexer, Token, TokenKind};
+use crate::field::HostFields;
+
 
 pub struct SshConfig {
     tokens: Vec<Token>
@@ -16,8 +15,9 @@ impl SshConfig {
         });
     }
 
-    pub fn query_host(&self, host: &str) -> HashMap<String, String> {
-        let mut host_params: HashMap<String, String> = HashMap::new();
+    /// Query fields for a given host while mimicing `ssh -G` behaviour
+    pub fn query_host_fields(&self, host: &str) -> HostFields {
+        let mut host_fields= HostFields::new();
         let mut in_target_section = false;
 
         let ksv_tokens: Vec<&Token> = self.tokens.iter()
@@ -31,11 +31,11 @@ impl SshConfig {
             let [key, _, val] = chunk else { continue; };
             if key.data.to_lowercase() == "host" {
                 in_target_section = val.data == host;
-            } else if in_target_section && !host_params.contains_key(&key.data.to_lowercase()){
-                host_params.insert(key.data.to_lowercase(), val.data.clone());
+            } else if in_target_section {
+                host_fields.add_field(&key.data, &val.data);
             }
         }
-        return host_params;
+        return host_fields;
     }
 }
 
@@ -51,10 +51,10 @@ Host my.server.local
 ";
 
         let config = SshConfig::new(data).unwrap();
-        let host_params = config.query_host("my.server.local");
+        let host_params = config.query_host_fields("my.server.local");
         assert_eq!(host_params.len(), 1);
         assert!(host_params.contains_key("key1"));
-        assert_eq!(host_params.get("key1").unwrap(), "Value1");
+        assert_eq!(host_params.get_one("key1").unwrap(), "Value1");
     }
 
     #[test]
@@ -66,12 +66,12 @@ Host my.server.local
 ";
 
         let config = SshConfig::new(data).unwrap();
-        let host_params = config.query_host("my.server.local");
+        let host_params = config.query_host_fields("my.server.local");
         assert_eq!(host_params.len(), 2);
         assert!(host_params.contains_key("key1"));
-        assert_eq!(host_params.get("key1").unwrap(), "Value1");
+        assert_eq!(host_params.get_one("key1").unwrap(), "Value1");
         assert!(host_params.contains_key("key2"));
-        assert_eq!(host_params.get("key2").unwrap(), "Value2");
+        assert_eq!(host_params.get_one("key2").unwrap(), "Value2");
     }
 
     #[test]
@@ -83,8 +83,8 @@ Host my.server.local
 ";
 
         let config = SshConfig::new(data).unwrap();
-        let host_params = config.query_host("my.server.local");
+        let host_params = config.query_host_fields("my.server.local");
         assert_eq!(host_params.len(), 1);
-        assert_eq!(host_params.get("key1").unwrap(), "Value1");
+        assert_eq!(host_params.get_one("key1").unwrap(), "Value1");
     }
 }

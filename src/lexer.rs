@@ -1,6 +1,19 @@
-use super::types::{Token, TokenKind};
 use std::iter::Peekable;
 use std::str::CharIndices;
+
+#[derive(PartialEq, Debug)]
+pub enum TokenKind {
+    WhiteSpace,
+    LineEnding,
+    Comment,
+    FieldKey,
+    FieldSeparator,
+    FieldValue,
+}
+pub struct Token {
+    pub kind: TokenKind,
+    pub data: String,
+}
 
 pub struct Lexer<'a> {
     data: &'a str,
