@@ -3,9 +3,9 @@ pub enum TokenKind {
     WhiteSpace,
     LineEnding,
     Comment,
-    Key,
-    Separator,
-    Value
+    FieldKey,
+    FieldSeparator,
+    FieldValue
 }
 pub struct Token {
     pub kind: TokenKind,
