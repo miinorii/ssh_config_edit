@@ -87,4 +87,20 @@ Host my.server.local
         assert_eq!(host_params.len(), 1);
         assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
     }
+
+    #[test]
+    fn keep_both_cumulative_params() {
+        let data = "
+Host my.server.local
+    IdentityFile Value1
+    IdentityFile Value2
+";
+
+        let config = SshConfig::new(data).unwrap();
+        let host_params = config.query_host_fields("my.server.local");
+        let cumulative_params = host_params.get_multiple("IdentityFile");
+        assert_eq!(cumulative_params.len(), 2);
+        assert_eq!(cumulative_params[0], "Value1");
+        assert_eq!(cumulative_params[1], "Value2");
+    }
 }
