@@ -42,8 +42,7 @@ impl HostSettings {
     pub fn contains_key(&self, key: &str) -> bool {
         return self.fields
             .iter()
-            .filter(|f| f.key.eq_ignore_ascii_case(key))
-            .count() != 0;
+            .any(|f| f.key.eq_ignore_ascii_case(key))
     }
 
     /// Access a singular field value corresponding to a case-insensitive key
