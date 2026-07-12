@@ -20,8 +20,13 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    #[inline]
+    fn peek_next_char_offset(&mut self) -> usize {
+        return self.iter.peek().map(|&(o, _)| o).unwrap_or(0);
+    }
+
     fn handle_whitespace(&mut self) -> Token {
-        let start = self.iter.peek().map(|&(o, _)| o).unwrap_or(0);
+        let start = self.peek_next_char_offset();
         let mut end = 0;
         while let Some(&(offset, char)) = self.iter.peek() {
             // check new lines to avoid breaking the line counter
@@ -37,7 +42,7 @@ impl<'a> Lexer<'a> {
 
     fn handle_comment(&mut self) -> Token {
         // except the first char to be '#'
-        let start = self.iter.peek().map(|&(o, _)| o).unwrap_or(0);
+        let start = self.peek_next_char_offset();
         let mut end = 0;
         while let Some(&(offset, char)) = self.iter.peek() {
             // consider a comment end when on a newline or when there is no more data
@@ -94,7 +99,7 @@ impl<'a> Lexer<'a> {
 
 
     fn handle_field_key(&mut self) -> Result<Token, String> {
-        let start = self.iter.peek().map(|&(o, _)| o).unwrap_or(0);
+        let start = self.peek_next_char_offset();
         let mut end = 0;
         loop {
             let next_data = self.iter.peek();
@@ -120,7 +125,7 @@ impl<'a> Lexer<'a> {
 
   
     fn handle_field_separator(&mut self) -> Result<Token, String> {
-        let start = self.iter.peek().map(|&(o, _)| o).unwrap_or(0);
+        let start = self.peek_next_char_offset();
         let mut end = 0;
         let mut equal_seen = false;
         loop {
@@ -162,7 +167,7 @@ impl<'a> Lexer<'a> {
 
 
     fn handle_field_value(&mut self) -> Result<Token, String> {
-        let start = self.iter.peek().map(|&(o, _)| o).unwrap_or(0);
+        let start = self.peek_next_char_offset();
         let mut end = 0;
         let mut has_consumed = false;
         loop {
