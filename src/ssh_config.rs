@@ -1,5 +1,6 @@
 use crate::lexer::{Lexer, Token, TokenKind};
-use crate::settings::HostSettings;
+use crate::settings::{HostSettings, Field};
+use crate::field_keys::FieldKey;
 
 
 pub struct SshConfig {
@@ -14,7 +15,7 @@ impl SshConfig {
             tokens: lexer.tokenize()?
         });
     }
-    
+
     /// Return the settings declared under the `Host` exactly matching the provided `host`.
     /// 
     /// Note: matches only a literal exact `Host` value.
@@ -31,14 +32,18 @@ impl SshConfig {
 
         for chunk in ksv_tokens.chunks_exact(3) {
             let [key, sep, val] = chunk else { continue; };
-            if key.data.eq_ignore_ascii_case("Host") {
+            if FieldKey::parse(&key.data) == FieldKey::Host {
                 // break when the literal 'Host' section is done
                 if in_target_section {
                     break
                 }
                 in_target_section = val.data == host;
             } else if in_target_section {
-                host_settings.add_field(&key.data, &sep.data, &val.data);
+                host_settings.add_field(Field {
+                    key: FieldKey::parse(&key.data),
+                    separator: sep.data.clone(),
+                    value: val.data.clone()
+                });
             }
         }
         return host_settings;
@@ -58,10 +63,14 @@ impl SshConfig {
 
         for chunk in ksv_tokens.chunks_exact(3) {
             let [key, sep, val] = chunk else { continue; };
-            if key.data.eq_ignore_ascii_case("Host") {
+            if FieldKey::parse(&key.data) == FieldKey::Host {
                 in_target_section = val.data == host;
             } else if in_target_section {
-                host_settings.add_field(&key.data, &sep.data, &val.data);
+                host_settings.add_field(Field {
+                    key: FieldKey::parse(&key.data),
+                    separator: sep.data.clone(),
+                    value: val.data.clone()
+                });
             }
         }
         return host_settings;
@@ -76,60 +85,62 @@ mod tests {
     fn single_host_single_param() {
         let data = "
 Host my.server.local
-    Key1 Value1
+    Hostname 1.2.3.4
 ";
 
         let config = SshConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.len(), 1);
-        assert!(host_params.contains_key("Key1"));
-        assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
+
+        assert!(host_params.contains_key(&FieldKey::Hostname));
+        assert_eq!(host_params.get_one(&FieldKey::Hostname).unwrap(), "1.2.3.4");
     }
 
     #[test]
     fn single_host_multiple_params() {
         let data = "
 Host my.server.local
-    Key1 Value1
-    Key2 Value2
+    Hostname 1.2.3.4
+    User test
 ";
 
         let config = SshConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.len(), 2);
-        assert!(host_params.contains_key("Key1"));
-        assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
-        assert!(host_params.contains_key("Key2"));
-        assert_eq!(host_params.get_one("Key2").unwrap(), "Value2");
+        assert!(host_params.contains_key(&FieldKey::Hostname));
+        assert_eq!(host_params.get_one(&FieldKey::Hostname).unwrap(), "1.2.3.4");
+        assert!(host_params.contains_key(&FieldKey::User));
+        assert_eq!(host_params.get_one(&FieldKey::User).unwrap(), "test");
     }
 
     #[test]
     fn keep_first_duplicated_params() {
         let data = "
 Host my.server.local
-    Key1 Value1
-    Key1 Value2
+    User first
+    User second
 ";
 
         let config = SshConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.len(), 1);
-        assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
+        assert!(host_params.contains_key(&FieldKey::User));
+        assert_eq!(host_params.get_one(&FieldKey::User).unwrap(), "first");
     }
 
     #[test]
     fn keep_both_cumulative_params() {
         let data = "
 Host my.server.local
-    IdentityFile Value1
-    IdentityFile Value2
+    IdentityFile ~/.ssh/fake_key1
+    IdentityFile ~/.ssh/fake_key2
 ";
 
         let config = SshConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
-        let cumulative_params = host_params.get_multiple("IdentityFile");
+        let cumulative_params = host_params.get_multiple(&FieldKey::IdentityFile);
         assert_eq!(cumulative_params.len(), 2);
-        assert_eq!(cumulative_params[0], "Value1");
-        assert_eq!(cumulative_params[1], "Value2");
+        assert_eq!(cumulative_params[0], "~/.ssh/fake_key1");
+        assert_eq!(cumulative_params[1], "~/.ssh/fake_key2");
     }
 }
