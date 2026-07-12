@@ -29,7 +29,7 @@ impl SshConfig {
 
         for chunk in ksv_tokens.chunks_exact(3) {
             let [key, _, val] = chunk else { continue; };
-            if key.data.to_lowercase() == "host" {
+            if key.data.eq_ignore_ascii_case("Host") {
                 in_target_section = val.data == host;
             } else if in_target_section {
                 host_fields.add_field(&key.data, &val.data);
@@ -53,8 +53,8 @@ Host my.server.local
         let config = SshConfig::new(data).unwrap();
         let host_params = config.query_host_fields("my.server.local");
         assert_eq!(host_params.len(), 1);
-        assert!(host_params.contains_key("key1"));
-        assert_eq!(host_params.get_one("key1").unwrap(), "Value1");
+        assert!(host_params.contains_key("Key1"));
+        assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
     }
 
     #[test]
@@ -68,10 +68,10 @@ Host my.server.local
         let config = SshConfig::new(data).unwrap();
         let host_params = config.query_host_fields("my.server.local");
         assert_eq!(host_params.len(), 2);
-        assert!(host_params.contains_key("key1"));
-        assert_eq!(host_params.get_one("key1").unwrap(), "Value1");
-        assert!(host_params.contains_key("key2"));
-        assert_eq!(host_params.get_one("key2").unwrap(), "Value2");
+        assert!(host_params.contains_key("Key1"));
+        assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
+        assert!(host_params.contains_key("Key2"));
+        assert_eq!(host_params.get_one("Key2").unwrap(), "Value2");
     }
 
     #[test]
@@ -85,6 +85,6 @@ Host my.server.local
         let config = SshConfig::new(data).unwrap();
         let host_params = config.query_host_fields("my.server.local");
         assert_eq!(host_params.len(), 1);
-        assert_eq!(host_params.get_one("key1").unwrap(), "Value1");
+        assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
     }
 }
