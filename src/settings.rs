@@ -65,7 +65,7 @@ impl HostSettings {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        return self.fields.len() == 0;
+        return self.fields.is_empty();
     }
 
     #[inline]
