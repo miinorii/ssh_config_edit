@@ -14,12 +14,12 @@ impl SshConfig {
             tokens: lexer.tokenize()?
         });
     }
-
+    
     /// Return the settings declared under the `Host` exactly matching the provided `host`.
     /// 
     /// Note: matches only a literal exact `Host` value.
     pub fn exact_host_settings(&self, host: &str) -> HostSettings {
-        let mut host_settings= HostSettings::new();
+        let mut host_settings= HostSettings::new(host);
         let mut in_target_section = false;
 
         let ksv_tokens: Vec<&Token> = self.tokens.iter()
@@ -46,7 +46,7 @@ impl SshConfig {
 
     /// Resolve the settings for a given `host` mimicking `ssh -G` behaviour.
     pub fn resolve_host_settings(&self, host: &str) -> HostSettings {
-        let mut host_settings= HostSettings::new();
+        let mut host_settings= HostSettings::new(host);
         let mut in_target_section = false;
 
         let ksv_tokens: Vec<&Token> = self.tokens.iter()

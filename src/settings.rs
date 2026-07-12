@@ -20,12 +20,13 @@ pub struct Field {
 }
 
 pub struct HostSettings {
+    host: String,
     fields: Vec<Field>
 }
 
 impl HostSettings {
-    pub fn new() -> Self {
-        return HostSettings { fields: Vec::new() }
+    pub fn new(host: &str) -> Self {
+        return HostSettings { host: host.into(), fields: Vec::new() }
     }
 
     /// Add and dedupe fields the same way that `ssh -G` does
