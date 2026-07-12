@@ -15,7 +15,7 @@ impl SshConfig {
         });
     }
 
-    /// Query fields for a given host while mimicing `ssh -G` behaviour
+    /// Query fields for a given host while mimicking `ssh -G` behaviour
     pub fn query_host_fields(&self, host: &str) -> HostFields {
         let mut host_fields= HostFields::new();
         let mut in_target_section = false;
