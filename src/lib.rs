@@ -1,3 +1,3 @@
 pub mod lexer;
-pub mod field;
+pub mod settings;
 pub mod ssh_config;

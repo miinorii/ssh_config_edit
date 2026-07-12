@@ -1,5 +1,5 @@
 use crate::lexer::{Lexer, Token, TokenKind};
-use crate::field::HostFields;
+use crate::settings::HostSettings;
 
 
 pub struct SshConfig {
@@ -15,9 +15,11 @@ impl SshConfig {
         });
     }
 
-    /// Query fields for a given host while mimicking `ssh -G` behaviour
-    pub fn query_host_fields(&self, host: &str) -> HostFields {
-        let mut host_fields= HostFields::new();
+    /// Return the settings declared under the `Host` exactly matching the provided `host`.
+    /// 
+    /// Note: matches only a literal exact `Host` value.
+    pub fn exact_host_settings(&self, host: &str) -> HostSettings {
+        let mut host_settings= HostSettings::new();
         let mut in_target_section = false;
 
         let ksv_tokens: Vec<&Token> = self.tokens.iter()
@@ -28,14 +30,41 @@ impl SshConfig {
             .collect();
 
         for chunk in ksv_tokens.chunks_exact(3) {
-            let [key, _, val] = chunk else { continue; };
+            let [key, sep, val] = chunk else { continue; };
+            if key.data.eq_ignore_ascii_case("Host") {
+                // break when the literal 'Host' section is done
+                if in_target_section {
+                    break
+                }
+                in_target_section = val.data == host;
+            } else if in_target_section {
+                host_settings.add_field(&key.data, &sep.data, &val.data);
+            }
+        }
+        return host_settings;
+    }
+
+    /// Resolve the settings for a given `host` mimicking `ssh -G` behaviour.
+    pub fn resolve_host_settings(&self, host: &str) -> HostSettings {
+        let mut host_settings= HostSettings::new();
+        let mut in_target_section = false;
+
+        let ksv_tokens: Vec<&Token> = self.tokens.iter()
+            .filter(|t| matches!(
+                t.kind,
+                TokenKind::FieldKey | TokenKind::FieldSeparator | TokenKind::FieldValue
+            ))
+            .collect();
+
+        for chunk in ksv_tokens.chunks_exact(3) {
+            let [key, sep, val] = chunk else { continue; };
             if key.data.eq_ignore_ascii_case("Host") {
                 in_target_section = val.data == host;
             } else if in_target_section {
-                host_fields.add_field(&key.data, &val.data);
+                host_settings.add_field(&key.data, &sep.data, &val.data);
             }
         }
-        return host_fields;
+        return host_settings;
     }
 }
 
@@ -44,21 +73,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn query_single_host_single_param() {
+    fn single_host_single_param() {
         let data = "
 Host my.server.local
     Key1 Value1
 ";
 
         let config = SshConfig::new(data).unwrap();
-        let host_params = config.query_host_fields("my.server.local");
+        let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.len(), 1);
         assert!(host_params.contains_key("Key1"));
         assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
     }
 
     #[test]
-    fn query_single_host_multiple_params() {
+    fn single_host_multiple_params() {
         let data = "
 Host my.server.local
     Key1 Value1
@@ -66,7 +95,7 @@ Host my.server.local
 ";
 
         let config = SshConfig::new(data).unwrap();
-        let host_params = config.query_host_fields("my.server.local");
+        let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.len(), 2);
         assert!(host_params.contains_key("Key1"));
         assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
@@ -83,7 +112,7 @@ Host my.server.local
 ";
 
         let config = SshConfig::new(data).unwrap();
-        let host_params = config.query_host_fields("my.server.local");
+        let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.len(), 1);
         assert_eq!(host_params.get_one("Key1").unwrap(), "Value1");
     }
@@ -97,7 +126,7 @@ Host my.server.local
 ";
 
         let config = SshConfig::new(data).unwrap();
-        let host_params = config.query_host_fields("my.server.local");
+        let host_params = config.exact_host_settings("my.server.local");
         let cumulative_params = host_params.get_multiple("IdentityFile");
         assert_eq!(cumulative_params.len(), 2);
         assert_eq!(cumulative_params[0], "Value1");

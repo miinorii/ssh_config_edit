@@ -15,22 +15,23 @@ pub const CUMULATIVE_FIELDS: &[&str] = &[
 #[derive(Debug, PartialEq)]
 pub struct Field {
     key: String,
+    separator: String,
     value: String
 }
 
-pub struct HostFields {
+pub struct HostSettings {
     fields: Vec<Field>
 }
 
-impl HostFields {
+impl HostSettings {
     pub fn new() -> Self {
-        return HostFields { fields: Vec::new() }
+        return HostSettings { fields: Vec::new() }
     }
 
     /// Add and dedupe fields the same way that `ssh -G` does
-    pub fn add_field(&mut self, key: &str, value: &str) {
+    pub fn add_field(&mut self, key: &str, separator: &str, value: &str) {
         if !self.contains_key(&key) || Self::is_cumulative(key) {
-            self.fields.push(Field { key: key.into(), value: value.into() });
+            self.fields.push(Field { key: key.into(), separator: separator.into(), value: value.into() });
         }
     }
 
