@@ -5,7 +5,7 @@ pub enum TokenKind {
     Comment,
     FieldKey,
     FieldSeparator,
-    FieldValue
+    FieldValue,
 }
 pub struct Token {
     pub kind: TokenKind,
