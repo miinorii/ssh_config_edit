@@ -47,21 +47,20 @@ impl HostSettings {
     }
 
     /// Access a singular field value corresponding to a case-insensitive key
-    pub fn get_one(&self, key: &str) -> Option<&String> {
+    pub fn get_one(&self, key: &str) -> Option<&str> {
         return self.fields
             .iter()
             .find(|f| f.key.eq_ignore_ascii_case(key))
-            .map(|f| &f.value);
+            .map(|f| f.value.as_str());
     }
 
     /// Access multiple fields values corresponding to a case-insensitive key
-    pub fn get_multiple(&self, key: &str) -> Vec<&String> {
-        let fields: Vec<&String> = self.fields
+    pub fn get_multiple(&self, key: &str) -> Vec<&str> {
+        return self.fields
             .iter()
             .filter(|f| f.key.eq_ignore_ascii_case(key))
-            .map(|f| &f.value)
+            .map(|f| f.value.as_str())
             .collect();
-        return fields;
     }
 
     #[inline]
