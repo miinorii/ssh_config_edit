@@ -9,6 +9,19 @@ pub struct Directive {
     pub ending: Option<Token>
 }
 
+impl fmt::Display for Directive {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(indent) = &self.indent {
+            write!(f, "{indent}")?;
+        }
+        write!(f, "{}{}{}", &self.key, &self.sep, &self.value)?;
+        if let Some(ending) = &self.ending {
+            write!(f, "{ending}")?;
+        } 
+        Ok(())
+    }
+}
+
 pub enum Line {
     Directive(Directive),
     Comment { indent: Option<Token>, text: Token, ending: Option<Token>},
@@ -75,13 +88,7 @@ impl fmt::Display for Line {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Line::Directive(d) => {
-                if let Some(indent) = &d.indent {
-                    write!(f, "{indent}")?;
-                }
-                write!(f, "{}{}{}",d.key, d.sep, d.value)?;
-                if let Some(ending) = &d.ending {
-                    write!(f, "{ending}")?;
-                }
+                write!(f, "{d}")?;
             },
             Line::Comment { indent, text, ending } => {
                 if let Some(indent) = indent {
