@@ -10,7 +10,7 @@ pub struct Directive {
 }
 
 impl Directive {
-    fn new(indent: Option<String>, key: String, sep: String, value: String, ending: Option<String>) -> Self {
+    pub fn new(indent: Option<String>, key: String, sep: String, value: String, ending: Option<String>) -> Self {
         let indent_token: Option<Token> = if let Some(indent) = indent {
             Some(Token { kind: TokenKind::WhiteSpace, data: indent })
         } else {
