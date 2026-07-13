@@ -33,7 +33,7 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     pub fn new(data: &'a str) -> Self {
         Self {
-            data: data,
+            data,
             iter: data.char_indices().peekable(),
             line: 1,
             pos: 0,
