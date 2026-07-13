@@ -200,6 +200,8 @@ mod tests {
         lines.iter().map(|l| l.to_string()).collect()
     }
 
+    // --- roundtrip tests ---
+
     #[test]
     fn roundtrip_mixed_content() {
         let data = "# global\nAddKeysToAgent yes\n\nHost a\n\tHostName 1.2.3.4\n";
@@ -228,5 +230,50 @@ mod tests {
     fn roundtrip_trailing_blank_lines() {
         let data = "Host a\n\tUser x\n\n   ";
         assert_eq!(roundtrip(data), data);
+    }
+
+    // --- Directive tests ---
+
+    fn sample_directive() -> Directive {
+        Directive::new("User", "x").unwrap()
+    }
+
+    #[test]
+    fn with_ending_rejects_garbage() {
+        assert!(sample_directive().with_ending("\r").is_err());
+        assert!(sample_directive().with_ending(" \n").is_err());
+    }
+
+    #[test]
+    fn with_sep_accepts_valid_forms() {
+        assert!(sample_directive().with_sep(" ").is_ok());
+        assert!(sample_directive().with_sep("=").is_ok());
+        assert_eq!(sample_directive().with_sep(" = ").unwrap().sep.data, " = ");
+    }
+
+    #[test]
+    fn with_sep_rejects_double_equal() {
+        assert!(sample_directive().with_sep("==").is_err());
+        assert!(sample_directive().with_sep("a==").is_err());
+    }
+
+    #[test]
+    fn with_sep_rejects_newline() {
+        assert!(sample_directive().with_sep(" \n ").is_err());
+    }
+
+    #[test]
+    fn with_sep_rejects_empty() {
+        assert!(sample_directive().with_sep("").is_err());
+    }
+
+    #[test]
+    fn with_indent_rejects_newline() {
+        assert!(sample_directive().with_indent("\n").is_err());
+    }
+
+    #[test]
+    fn with_indent_accepts_blank_chars() {
+        assert!(sample_directive().with_indent("\t  ").is_ok());
     }
 }
