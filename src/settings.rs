@@ -3,7 +3,6 @@ use crate::field_keys::FieldKey;
 #[derive(Debug, PartialEq, Clone)]
 pub struct Field {
     pub key: FieldKey,
-    pub separator: String,
     pub value: String,
 }
 
