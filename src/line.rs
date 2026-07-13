@@ -1,8 +1,16 @@
 use std::{iter::Peekable, vec};
 use crate::lexer::{Token, TokenKind};
 
+pub struct Directive {
+    pub indent: Option<Token>,
+    pub key: Token,
+    pub sep: Token,
+    pub value: Token,
+    pub ending: Option<Token>
+}
+
 pub enum Line {
-    Directive { indent: Option<Token>, key: Token, sep: Token, value: Token, ending: Option<Token>},
+    Directive(Directive),
     Comment { indent: Option<Token>, text: Token, ending: Option<Token>},
     Blank { indent: Option<Token>, ending: Option<Token>},
 }
@@ -49,13 +57,13 @@ impl Line {
                     .next_if(|t| t.kind == TokenKind::FieldValue)
                     .ok_or("expected FieldValue")?;
                 let ending = iter.next_if(|t| t.kind == TokenKind::LineEnding);
-                return Ok(Line::Directive { 
+                return Ok(Line::Directive(Directive{ 
                     indent, 
                     key, 
                     sep, 
                     value, 
                     ending 
-                })
+                }));
             },
             Some(other) => Err(format!("unexpected token: {other:?}"))
         }
