@@ -128,7 +128,6 @@ impl SshConfig {
         for d in directives {
             settings.add_field(Field { 
                 key: FieldKey::parse(&d.key.data), 
-                separator: d.sep.data.clone(), 
                 value: d.value.data.clone() 
             });
         }
