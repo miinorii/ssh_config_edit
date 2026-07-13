@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::str::CharIndices;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum TokenKind {
     WhiteSpace,
     LineEnding,
