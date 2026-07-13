@@ -1,4 +1,4 @@
-use std::{iter::Peekable, vec};
+use std::{iter::Peekable, vec, fmt};
 use crate::lexer::{Token, TokenKind};
 
 pub struct Directive {
@@ -67,5 +67,40 @@ impl Line {
             },
             Some(other) => Err(format!("unexpected token: {other:?}"))
         }
+    }
+}
+
+
+impl fmt::Display for Line {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Line::Directive(d) => {
+                if let Some(indent) = &d.indent {
+                    write!(f, "{indent}")?;
+                }
+                write!(f, "{}{}{}",d.key, d.sep, d.value)?;
+                if let Some(ending) = &d.ending {
+                    write!(f, "{ending}")?;
+                }
+            },
+            Line::Comment { indent, text, ending } => {
+                if let Some(indent) = indent {
+                    write!(f, "{indent}")?;
+                }
+                write!(f, "{text}")?;
+                if let Some(ending) = ending {
+                    write!(f, "{ending}")?;
+                }
+            },
+            Line::Blank { indent, ending } => {
+                if let Some(indent) = indent {
+                    write!(f, "{indent}")?;
+                }
+                if let Some(ending) = ending {
+                    write!(f, "{ending}")?;
+                }
+            }
+        }
+        Ok(())
     }
 }
