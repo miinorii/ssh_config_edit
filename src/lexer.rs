@@ -1,4 +1,4 @@
-use std::iter::Peekable;
+use std::{iter::Peekable, fmt};
 use std::str::CharIndices;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -15,6 +15,12 @@ pub enum TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub data: String,
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", &self.data)
+    }
 }
 
 pub struct Lexer<'a> {
