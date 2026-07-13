@@ -11,46 +11,50 @@ pub struct Directive {
 
 impl Directive {
     pub fn new(
-        indent: Option<String>,
-        key: String,
-        sep: String,
-        value: String,
-        ending: Option<String>,
+        key: &str,
+        value: &str,
     ) -> Self {
-        let indent_token: Option<Token> = if let Some(indent) = indent {
-            Some(Token {
-                kind: TokenKind::WhiteSpace,
-                data: indent,
-            })
-        } else {
-            None
-        };
-
-        let ending_token: Option<Token> = if let Some(ending) = ending {
-            Some(Token {
-                kind: TokenKind::LineEnding,
-                data: ending,
-            })
-        } else {
-            None
-        };
 
         Self {
-            indent: indent_token,
+            indent: None,
             key: Token {
                 kind: TokenKind::FieldKey,
-                data: key,
+                data: key.into(),
             },
             sep: Token {
                 kind: TokenKind::FieldSeparator,
-                data: sep,
+                data: " ".into(),
             },
             value: Token {
                 kind: TokenKind::FieldValue,
-                data: value,
+                data: value.into(),
             },
-            ending: ending_token,
+            ending: None,
         }
+    }
+
+    pub fn with_indent(mut self, indent: &str) -> Result<Self, String>{
+        if indent.chars().filter(|c| !c.is_whitespace()).count() != 0 {
+            return Err("unexpected indent content: indent should composed of whitespace only".into());
+        }
+        self.indent = Some(Token{kind: TokenKind::WhiteSpace, data: indent.to_string()});
+        Ok(self)
+    }
+
+    pub fn with_sep(mut self, sep: &str) -> Result<Self, String> {
+        if sep.chars().filter(|c| !c.is_whitespace() && *c != '=').count() != 0 && sep.chars().filter(|c| *c == '=').count() <= 1 {
+            return Err("unexpected separator content: separator should be composed of whitespaces and at most one '='".into());
+        }
+        self.sep.data = sep.into();
+        Ok(self)
+    }
+
+    pub fn with_ending(mut self, ending: &str) -> Result<Self, String> {
+        if ending != "\n" && ending != "\r\n" {
+            return Err("unexpected ending content: ending should be '\\n' or '\\r\\n".into());
+        }
+        self.indent = Some(Token{kind: TokenKind::LineEnding, data: ending.to_string()});
+        Ok(self)
     }
 }
 
