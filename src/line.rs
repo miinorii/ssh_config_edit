@@ -189,3 +189,44 @@ impl fmt::Display for Line {
 fn is_inline_ws(c: char) -> bool {
     c.is_whitespace() && c != '\n' && c != '\r'
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::Lexer;
+
+    fn roundtrip(data: &str) -> String {
+        let lines = Line::parse_lines(Lexer::new(data).tokenize().unwrap()).unwrap();
+        lines.iter().map(|l| l.to_string()).collect()
+    }
+
+    #[test]
+    fn roundtrip_mixed_content() {
+        let data = "# global\nAddKeysToAgent yes\n\nHost a\n\tHostName 1.2.3.4\n";
+        assert_eq!(roundtrip(data), data);
+    }
+
+    #[test]
+    fn roundtrip_crlf() {
+        let data = "Host a\r\n\tUser x\r\n";
+        assert_eq!(roundtrip(data), data);
+    }
+
+    #[test]
+    fn roundtrip_no_trailing_newline() {
+        let data = "Host a\n\tUser x";
+        assert_eq!(roundtrip(data), data);
+    }
+
+    #[test]
+    fn roundtrip_equals_separator() {
+        let data = "Host = a\n\tPort=22\n";
+        assert_eq!(roundtrip(data), data);
+    }
+
+    #[test]
+    fn roundtrip_trailing_blank_lines() {
+        let data = "Host a\n\tUser x\n\n   ";
+        assert_eq!(roundtrip(data), data);
+    }
+}
