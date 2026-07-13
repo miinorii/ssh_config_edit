@@ -4,7 +4,7 @@ use crate::field_keys::FieldKey;
 pub struct Field {
     pub key: FieldKey,
     pub separator: String,
-    pub value: String
+    pub value: String,
 }
 
 pub struct HostSettings {
@@ -14,7 +14,10 @@ pub struct HostSettings {
 
 impl HostSettings {
     pub fn new(host: &str) -> Self {
-        return HostSettings { host: host.into(), fields: Vec::new() }
+        return HostSettings {
+            host: host.into(),
+            fields: Vec::new(),
+        };
     }
 
     /// Add and dedupe fields the same way that `ssh -G` does
@@ -25,14 +28,13 @@ impl HostSettings {
     }
 
     pub fn contains_key(&self, key: &FieldKey) -> bool {
-        return self.fields
-            .iter()
-            .any(|f| f.key == *key)
+        return self.fields.iter().any(|f| f.key == *key);
     }
 
     /// Access a singular field value corresponding to a case-insensitive key
     pub fn get_one(&self, key: &FieldKey) -> Option<&str> {
-        return self.fields
+        return self
+            .fields
             .iter()
             .find(|f| f.key == *key)
             .map(|f| f.value.as_str());
@@ -40,7 +42,8 @@ impl HostSettings {
 
     /// Access multiple fields values corresponding to a case-insensitive key
     pub fn get_multiple(&self, key: &FieldKey) -> Vec<&str> {
-        return self.fields
+        return self
+            .fields
             .iter()
             .filter(|f| f.key == *key)
             .map(|f| f.value.as_str())

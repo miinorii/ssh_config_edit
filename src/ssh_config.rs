@@ -17,32 +17,38 @@ impl SshConfig {
     }
 
     /// Return the settings declared under the `Host` exactly matching the provided `host`.
-    /// 
+    ///
     /// Note: matches only a literal exact `Host` value.
     pub fn exact_host_settings(&self, host: &str) -> HostSettings {
-        let mut host_settings= HostSettings::new(host);
+        let mut host_settings = HostSettings::new(host);
         let mut in_target_section = false;
 
-        let ksv_tokens: Vec<&Token> = self.tokens.iter()
-            .filter(|t| matches!(
-                t.kind,
-                TokenKind::FieldKey | TokenKind::FieldSeparator | TokenKind::FieldValue
-            ))
+        let ksv_tokens: Vec<&Token> = self
+            .tokens
+            .iter()
+            .filter(|t| {
+                matches!(
+                    t.kind,
+                    TokenKind::FieldKey | TokenKind::FieldSeparator | TokenKind::FieldValue
+                )
+            })
             .collect();
 
         for chunk in ksv_tokens.chunks_exact(3) {
-            let [key, sep, val] = chunk else { continue; };
+            let [key, sep, val] = chunk else {
+                continue;
+            };
             if FieldKey::parse(&key.data) == FieldKey::Host {
                 // break when the literal 'Host' section is done
                 if in_target_section {
-                    break
+                    break;
                 }
                 in_target_section = val.data == host;
             } else if in_target_section {
                 host_settings.add_field(Field {
                     key: FieldKey::parse(&key.data),
                     separator: sep.data.clone(),
-                    value: val.data.clone()
+                    value: val.data.clone(),
                 });
             }
         }
@@ -51,25 +57,31 @@ impl SshConfig {
 
     /// Resolve the settings for a given `host` mimicking `ssh -G` behaviour.
     pub fn resolve_host_settings(&self, host: &str) -> HostSettings {
-        let mut host_settings= HostSettings::new(host);
+        let mut host_settings = HostSettings::new(host);
         let mut in_target_section = false;
 
-        let ksv_tokens: Vec<&Token> = self.tokens.iter()
-            .filter(|t| matches!(
-                t.kind,
-                TokenKind::FieldKey | TokenKind::FieldSeparator | TokenKind::FieldValue
-            ))
+        let ksv_tokens: Vec<&Token> = self
+            .tokens
+            .iter()
+            .filter(|t| {
+                matches!(
+                    t.kind,
+                    TokenKind::FieldKey | TokenKind::FieldSeparator | TokenKind::FieldValue
+                )
+            })
             .collect();
 
         for chunk in ksv_tokens.chunks_exact(3) {
-            let [key, sep, val] = chunk else { continue; };
+            let [key, sep, val] = chunk else {
+                continue;
+            };
             if FieldKey::parse(&key.data) == FieldKey::Host {
                 in_target_section = val.data == host;
             } else if in_target_section {
                 host_settings.add_field(Field {
                     key: FieldKey::parse(&key.data),
                     separator: sep.data.clone(),
-                    value: val.data.clone()
+                    value: val.data.clone(),
                 });
             }
         }

@@ -4,7 +4,7 @@
 //! https://man7.org/linux/man-pages/man5/ssh_config.5.html
 //!
 //! Per ssh_config(5), known keywords are case-insensitive.
-//! 
+//!
 //! Disclaimer: due to the sheer number of parameters, file generation was automated using AI.
 
 use std::fmt;
