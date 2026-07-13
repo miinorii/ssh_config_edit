@@ -1,7 +1,7 @@
 use crate::field_keys::FieldKey;
 use crate::lexer::{Lexer, Token, TokenKind};
 use crate::settings::{Field, HostSettings};
-use crate::line::Line;
+use crate::line::{Line, Directive};
 use crate::section::Section;
 
 pub struct SshConfig {
@@ -21,93 +21,38 @@ impl SshConfig {
     }
 
     pub fn set_host_settings(&mut self, host_settings: &HostSettings) {
-        // Infer line ending to use when saving
-        // let line_ending_token = self
-        //     .tokens
-        //     .iter()
-        //     .find(|t| matches!(t.kind, TokenKind::LineEnding))
-        //     .map_or(
-        //         Token {
-        //             kind: TokenKind::LineEnding,
-        //             data: '\n'.into(),
-        //         },
-        //         |t| t.clone(),
-        //     );
+        let target_section = self
+            .sections
+            .iter_mut()
+            .find(|s| s.header.value.data == host_settings.host);
 
-        // // Build the token representation HostSettings
-        // let mut new_host_section: Vec<Token> = Vec::new();
-        // new_host_section.push(Token {
-        //     kind: TokenKind::FieldKey,
-        //     data: FieldKey::Host.to_string(),
-        // });
-        // new_host_section.push(Token {
-        //     kind: TokenKind::FieldSeparator,
-        //     data: " ".into(),
-        // });
-        // new_host_section.push(Token {
-        //     kind: TokenKind::FieldValue,
-        //     data: host_settings.host.clone(),
-        // });
-        // new_host_section.push(line_ending_token.clone());
+        match target_section {
+            Some(s) => {
 
-        // for field in &host_settings.fields {
-        //     new_host_section.push(Token {
-        //         kind: TokenKind::WhiteSpace,
-        //         data: '\t'.into(),
-        //     });
-        //     new_host_section.push(Token {
-        //         kind: TokenKind::FieldKey,
-        //         data: field.key.to_string(),
-        //     });
-        //     new_host_section.push(Token {
-        //         kind: TokenKind::FieldSeparator,
-        //         data: field.separator.clone(),
-        //     });
-        //     new_host_section.push(Token {
-        //         kind: TokenKind::FieldValue,
-        //         data: field.value.clone(),
-        //     });
-        //     new_host_section.push(line_ending_token.clone());
-        // }
+            },
+            None => {
+                let header = Directive::new(
+                    None, 
+                    FieldKey::Host.to_string(), 
+                    " ".into(), 
+                    host_settings.host.clone(), 
+                    String::from("\n").into()
+                );
 
-        // let ksv_tokens: Vec<(usize, &Token)> = self
-        //     .tokens
-        //     .iter()
-        //     .enumerate()
-        //     .filter(|(_, t)| {
-        //         matches!(
-        //             t.kind,
-        //             TokenKind::FieldKey | TokenKind::FieldSeparator | TokenKind::FieldValue
-        //         )
-        //     })
-        //     .collect();
-
-        // // Find the start and end index of the target host section.
-        // // Insert at the top if none is found
-        // let mut host_section_found = false;
-        // let mut host_section_start: usize = 0;
-        // let mut host_section_end: usize = 0;
-        // for chunk in ksv_tokens.chunks_exact(3) {
-        //     let [(index, key), _, (_, value)] = chunk else {
-        //         continue;
-        //     };
-        //     if FieldKey::parse(&key.data) == FieldKey::Host {
-        //         if host_section_found {
-        //             host_section_end = *index;
-        //             break;
-        //         }
-
-        //         if value.data == host_settings.host {
-        //             host_section_start = *index;
-        //             host_section_found = true;
-        //         } else {
-        //             host_section_found = false;
-        //         }
-        //     }
-        // }
-
-        // self.tokens
-        //     .splice(host_section_start..host_section_end, new_host_section);
+                let mut body: Vec<Line> = Vec::new();
+                for field in &host_settings.fields {
+                    let param = Directive::new(
+                        String::from("\t").into(), 
+                        field.key.to_string(), 
+                        " ".into(), 
+                        field.value.clone(), 
+                        String::from("\n").into()
+                    );
+                    body.push(Line::Directive(param));
+                }
+                self.sections.insert(0, Section { header, body });
+            }
+        }        
     }
 
     /// Return the settings declared under the `Host` exactly matching the provided `host`.
