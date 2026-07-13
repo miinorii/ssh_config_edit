@@ -9,6 +9,30 @@ pub struct Directive {
     pub ending: Option<Token>
 }
 
+impl Directive {
+    fn new(indent: Option<String>, key: String, sep: String, value: String, ending: Option<String>) -> Self {
+        let indent_token: Option<Token> = if let Some(indent) = indent {
+            Some(Token { kind: TokenKind::WhiteSpace, data: indent })
+        } else {
+            None
+        };
+
+        let ending_token: Option<Token> = if let Some(ending) = ending {
+            Some(Token { kind: TokenKind::LineEnding, data: ending })
+        } else {
+            None
+        };
+
+        Self {
+            indent: indent_token,
+            key: Token { kind: TokenKind::FieldKey, data: key },
+            sep: Token { kind: TokenKind::FieldSeparator, data: sep },
+            value: Token { kind: TokenKind::FieldValue, data: value },
+            ending: ending_token
+        }
+    }
+}
+
 impl fmt::Display for Directive {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(indent) = &self.indent {
