@@ -381,7 +381,7 @@ mod tests {
     }
 
     #[test]
-    fn unknown_becomes_other_lowercased() {
+    fn unknown_becomes_other() {
         assert_eq!(
             FieldKey::parse("MadeUpOption"),
             FieldKey::Other("MadeUpOption".to_string())
