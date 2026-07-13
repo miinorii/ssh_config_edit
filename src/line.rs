@@ -10,12 +10,16 @@ pub struct Directive {
 }
 
 impl Directive {
-    pub fn new(
-        key: &str,
-        value: &str,
-    ) -> Self {
+    pub fn new(key: &str, value: &str) -> Result<Self, String> {
+        if key.is_empty() {
+            return Err("key is empty".into());
+        }
 
-        Self {
+        if value.is_empty() {
+            return Err("value is empty".into());
+        }
+
+        Ok(Self {
             indent: None,
             key: Token {
                 kind: TokenKind::FieldKey,
@@ -30,19 +34,27 @@ impl Directive {
                 data: value.into(),
             },
             ending: None,
-        }
+        })
     }
 
-    pub fn with_indent(mut self, indent: &str) -> Result<Self, String>{
-        if indent.chars().filter(|c| !c.is_whitespace()).count() != 0 {
-            return Err("unexpected indent content: indent should composed of whitespace only".into());
+    pub fn with_indent(mut self, indent: &str) -> Result<Self, String> {
+        if indent.chars().any(|c| !is_inline_ws(c)) || indent.is_empty() {
+            return Err(
+                "unexpected indent content: indent should be composed of whitespace only".into(),
+            );
         }
-        self.indent = Some(Token{kind: TokenKind::WhiteSpace, data: indent.to_string()});
+        self.indent = Some(Token {
+            kind: TokenKind::WhiteSpace,
+            data: indent.to_string(),
+        });
         Ok(self)
     }
 
     pub fn with_sep(mut self, sep: &str) -> Result<Self, String> {
-        if sep.chars().filter(|c| !c.is_whitespace() && *c != '=').count() != 0 && sep.chars().filter(|c| *c == '=').count() <= 1 {
+        if sep.chars().any(|c| !is_inline_ws(c) && c != '=')
+            || sep.chars().filter(|c| *c == '=').count() > 1
+            || sep.is_empty()
+        {
             return Err("unexpected separator content: separator should be composed of whitespaces and at most one '='".into());
         }
         self.sep.data = sep.into();
@@ -51,9 +63,12 @@ impl Directive {
 
     pub fn with_ending(mut self, ending: &str) -> Result<Self, String> {
         if ending != "\n" && ending != "\r\n" {
-            return Err("unexpected ending content: ending should be '\\n' or '\\r\\n".into());
+            return Err("unexpected ending content: ending should be '\\n' or '\\r\\n'".into());
         }
-        self.indent = Some(Token{kind: TokenKind::LineEnding, data: ending.to_string()});
+        self.ending = Some(Token {
+            kind: TokenKind::LineEnding,
+            data: ending.to_string(),
+        });
         Ok(self)
     }
 }
@@ -169,4 +184,8 @@ impl fmt::Display for Line {
         }
         Ok(())
     }
+}
+
+fn is_inline_ws(c: char) -> bool {
+    c.is_whitespace() && c != '\n' && c != '\r'
 }

@@ -17,7 +17,7 @@ impl SshConfig {
         return Ok(SshConfig { preamble, sections });
     }
 
-    pub fn set_host_settings(&mut self, host_settings: &HostSettings) {
+    pub fn set_host_settings(&mut self, host_settings: &HostSettings) -> Result<(), String> {
         let target_section = self
             .sections
             .iter_mut()
@@ -26,28 +26,20 @@ impl SshConfig {
         match target_section {
             Some(s) => {}
             None => {
-                let header = Directive::new(
-                    None,
-                    FieldKey::Host.to_string(),
-                    " ".into(),
-                    host_settings.host.clone(),
-                    String::from("\n").into(),
-                );
+                let header = Directive::new(&FieldKey::Host.to_string(), &host_settings.host)?
+                    .with_ending("\n")?;
 
                 let mut body: Vec<Line> = Vec::new();
                 for field in &host_settings.fields {
-                    let param = Directive::new(
-                        String::from("\t").into(),
-                        field.key.to_string(),
-                        " ".into(),
-                        field.value.clone(),
-                        String::from("\n").into(),
-                    );
+                    let param = Directive::new(&field.key.to_string(), &field.value)?
+                        .with_indent("\t")?
+                        .with_ending("\n")?;
                     body.push(Line::Directive(param));
                 }
                 self.sections.insert(0, Section { header, body });
             }
         }
+        Ok(())
     }
 
     /// Return the settings declared under the `Host` exactly matching the provided `host`.
