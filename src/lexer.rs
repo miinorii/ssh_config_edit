@@ -36,7 +36,7 @@ impl<'a> Lexer<'a> {
 
     #[inline]
     fn peek_next_char_offset(&mut self) -> usize {
-        return self.iter.peek().map(|&(o, _)| o).unwrap_or(0);
+        return self.iter.peek().map(|&(o, _)| o).unwrap_or(self.data.len());
     }
 
     fn handle_whitespace(&mut self) -> Token {
