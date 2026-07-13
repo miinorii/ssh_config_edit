@@ -1,5 +1,5 @@
-use std::{iter::Peekable, fmt};
 use std::str::CharIndices;
+use std::{fmt, iter::Peekable};
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenKind {

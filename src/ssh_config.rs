@@ -1,12 +1,12 @@
 use crate::field_keys::FieldKey;
 use crate::lexer::{Lexer, Token, TokenKind};
-use crate::settings::{Field, HostSettings};
-use crate::line::{Line, Directive};
+use crate::line::{Directive, Line};
 use crate::section::Section;
+use crate::settings::{Field, HostSettings};
 
 pub struct SshConfig {
     preamble: Vec<Line>,
-    sections: Vec<Section>
+    sections: Vec<Section>,
 }
 
 impl SshConfig {
@@ -14,10 +14,7 @@ impl SshConfig {
         let lexer = Lexer::new(&data);
         let lines = Line::parse_lines(lexer.tokenize()?)?;
         let (preamble, sections) = Section::parse_sections(lines);
-        return Ok(SshConfig {
-            preamble,
-            sections
-        });
+        return Ok(SshConfig { preamble, sections });
     }
 
     pub fn set_host_settings(&mut self, host_settings: &HostSettings) {
@@ -27,53 +24,52 @@ impl SshConfig {
             .find(|s| s.header.value.data == host_settings.host);
 
         match target_section {
-            Some(s) => {
-
-            },
+            Some(s) => {}
             None => {
                 let header = Directive::new(
-                    None, 
-                    FieldKey::Host.to_string(), 
-                    " ".into(), 
-                    host_settings.host.clone(), 
-                    String::from("\n").into()
+                    None,
+                    FieldKey::Host.to_string(),
+                    " ".into(),
+                    host_settings.host.clone(),
+                    String::from("\n").into(),
                 );
 
                 let mut body: Vec<Line> = Vec::new();
                 for field in &host_settings.fields {
                     let param = Directive::new(
-                        String::from("\t").into(), 
-                        field.key.to_string(), 
-                        " ".into(), 
-                        field.value.clone(), 
-                        String::from("\n").into()
+                        String::from("\t").into(),
+                        field.key.to_string(),
+                        " ".into(),
+                        field.value.clone(),
+                        String::from("\n").into(),
                     );
                     body.push(Line::Directive(param));
                 }
                 self.sections.insert(0, Section { header, body });
             }
-        }        
+        }
     }
 
     /// Return the settings declared under the `Host` exactly matching the provided `host`.
     ///
     /// Note: matches only a literal exact `Host` value.
     pub fn exact_host_settings(&self, host: &str) -> HostSettings {
-        let directives = self.sections
+        let directives = self
+            .sections
             .iter()
             .find(|s| s.header.value.data == host)
             .into_iter()
             .flat_map(|s| &s.body)
             .filter_map(|l| match l {
                 Line::Directive(d) => Some(d),
-                _ => None
+                _ => None,
             });
 
         let mut settings = HostSettings::new(host);
         for d in directives {
-            settings.add_field(Field { 
-                key: FieldKey::parse(&d.key.data), 
-                value: d.value.data.clone() 
+            settings.add_field(Field {
+                key: FieldKey::parse(&d.key.data),
+                value: d.value.data.clone(),
             });
         }
         settings

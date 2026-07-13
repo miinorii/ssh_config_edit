@@ -1,10 +1,10 @@
-use std::fmt;
-use crate::line::{Directive, Line};
 use crate::field_keys::FieldKey;
+use crate::line::{Directive, Line};
+use std::fmt;
 
 pub struct Section {
     pub header: Directive,
-    pub body: Vec<Line>
+    pub body: Vec<Line>,
 }
 
 impl fmt::Display for Section {
@@ -25,12 +25,15 @@ impl Section {
         for line in lines {
             match line {
                 Line::Directive(d) if FieldKey::parse(&d.key.data).is_selector() => {
-                    sections.push(Section { header: d, body: Vec::new() });
+                    sections.push(Section {
+                        header: d,
+                        body: Vec::new(),
+                    });
                 }
                 line => match sections.last_mut() {
                     Some(section) => section.body.push(line),
                     None => preamble.push(line),
-                }
+                },
             }
         }
         (preamble, sections)
