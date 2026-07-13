@@ -1,18 +1,17 @@
-use crate::lexer::{Lexer, Token, TokenKind};
-use crate::settings::{HostSettings, Field};
 use crate::field_keys::FieldKey;
-
+use crate::lexer::{Lexer, Token, TokenKind};
+use crate::settings::{Field, HostSettings};
 
 pub struct SshConfig {
-    tokens: Vec<Token>
+    tokens: Vec<Token>,
 }
 
 impl SshConfig {
-    pub fn new(data: &str) -> Result<SshConfig, String>{
+    pub fn new(data: &str) -> Result<SshConfig, String> {
         let lexer = Lexer::new(&data);
 
         return Ok(SshConfig {
-            tokens: lexer.tokenize()?
+            tokens: lexer.tokenize()?,
         });
     }
 
