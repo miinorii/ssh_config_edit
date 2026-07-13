@@ -10,6 +10,8 @@ pub enum TokenKind {
     FieldSeparator,
     FieldValue,
 }
+
+#[derive(Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub data: String,
