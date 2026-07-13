@@ -1,91 +1,144 @@
 use crate::field_keys::FieldKey;
 use crate::lexer::{Lexer, Token, TokenKind};
 use crate::settings::{Field, HostSettings};
+use crate::line::Line;
+use crate::section::Section;
 
 pub struct SshConfig {
-    tokens: Vec<Token>,
+    preamble: Vec<Line>,
+    sections: Vec<Section>
 }
 
 impl SshConfig {
     pub fn new(data: &str) -> Result<SshConfig, String> {
         let lexer = Lexer::new(&data);
-
+        let lines = Line::parse_lines(lexer.tokenize()?)?;
+        let (preamble, sections) = Section::parse_sections(lines);
         return Ok(SshConfig {
-            tokens: lexer.tokenize()?,
+            preamble,
+            sections
         });
+    }
+
+    pub fn set_host_settings(&mut self, host_settings: &HostSettings) {
+        // Infer line ending to use when saving
+        // let line_ending_token = self
+        //     .tokens
+        //     .iter()
+        //     .find(|t| matches!(t.kind, TokenKind::LineEnding))
+        //     .map_or(
+        //         Token {
+        //             kind: TokenKind::LineEnding,
+        //             data: '\n'.into(),
+        //         },
+        //         |t| t.clone(),
+        //     );
+
+        // // Build the token representation HostSettings
+        // let mut new_host_section: Vec<Token> = Vec::new();
+        // new_host_section.push(Token {
+        //     kind: TokenKind::FieldKey,
+        //     data: FieldKey::Host.to_string(),
+        // });
+        // new_host_section.push(Token {
+        //     kind: TokenKind::FieldSeparator,
+        //     data: " ".into(),
+        // });
+        // new_host_section.push(Token {
+        //     kind: TokenKind::FieldValue,
+        //     data: host_settings.host.clone(),
+        // });
+        // new_host_section.push(line_ending_token.clone());
+
+        // for field in &host_settings.fields {
+        //     new_host_section.push(Token {
+        //         kind: TokenKind::WhiteSpace,
+        //         data: '\t'.into(),
+        //     });
+        //     new_host_section.push(Token {
+        //         kind: TokenKind::FieldKey,
+        //         data: field.key.to_string(),
+        //     });
+        //     new_host_section.push(Token {
+        //         kind: TokenKind::FieldSeparator,
+        //         data: field.separator.clone(),
+        //     });
+        //     new_host_section.push(Token {
+        //         kind: TokenKind::FieldValue,
+        //         data: field.value.clone(),
+        //     });
+        //     new_host_section.push(line_ending_token.clone());
+        // }
+
+        // let ksv_tokens: Vec<(usize, &Token)> = self
+        //     .tokens
+        //     .iter()
+        //     .enumerate()
+        //     .filter(|(_, t)| {
+        //         matches!(
+        //             t.kind,
+        //             TokenKind::FieldKey | TokenKind::FieldSeparator | TokenKind::FieldValue
+        //         )
+        //     })
+        //     .collect();
+
+        // // Find the start and end index of the target host section.
+        // // Insert at the top if none is found
+        // let mut host_section_found = false;
+        // let mut host_section_start: usize = 0;
+        // let mut host_section_end: usize = 0;
+        // for chunk in ksv_tokens.chunks_exact(3) {
+        //     let [(index, key), _, (_, value)] = chunk else {
+        //         continue;
+        //     };
+        //     if FieldKey::parse(&key.data) == FieldKey::Host {
+        //         if host_section_found {
+        //             host_section_end = *index;
+        //             break;
+        //         }
+
+        //         if value.data == host_settings.host {
+        //             host_section_start = *index;
+        //             host_section_found = true;
+        //         } else {
+        //             host_section_found = false;
+        //         }
+        //     }
+        // }
+
+        // self.tokens
+        //     .splice(host_section_start..host_section_end, new_host_section);
     }
 
     /// Return the settings declared under the `Host` exactly matching the provided `host`.
     ///
     /// Note: matches only a literal exact `Host` value.
     pub fn exact_host_settings(&self, host: &str) -> HostSettings {
-        let mut host_settings = HostSettings::new(host);
-        let mut in_target_section = false;
-
-        let ksv_tokens: Vec<&Token> = self
-            .tokens
+        let directives = self.sections
             .iter()
-            .filter(|t| {
-                matches!(
-                    t.kind,
-                    TokenKind::FieldKey | TokenKind::FieldSeparator | TokenKind::FieldValue
-                )
-            })
-            .collect();
+            .find(|s| s.header.value.data == host)
+            .into_iter()
+            .flat_map(|s| &s.body)
+            .filter_map(|l| match l {
+                Line::Directive(d) => Some(d),
+                _ => None
+            });
 
-        for chunk in ksv_tokens.chunks_exact(3) {
-            let [key, sep, val] = chunk else {
-                continue;
-            };
-            if FieldKey::parse(&key.data) == FieldKey::Host {
-                // break when the literal 'Host' section is done
-                if in_target_section {
-                    break;
-                }
-                in_target_section = val.data == host;
-            } else if in_target_section {
-                host_settings.add_field(Field {
-                    key: FieldKey::parse(&key.data),
-                    separator: sep.data.clone(),
-                    value: val.data.clone(),
-                });
-            }
+        let mut settings = HostSettings::new(host);
+        for d in directives {
+            settings.add_field(Field { 
+                key: FieldKey::parse(&d.key.data), 
+                separator: d.sep.data.clone(), 
+                value: d.value.data.clone() 
+            });
         }
-        return host_settings;
+        settings
     }
 
-    /// Resolve the settings for a given `host` mimicking `ssh -G` behaviour.
-    pub fn resolve_host_settings(&self, host: &str) -> HostSettings {
-        let mut host_settings = HostSettings::new(host);
-        let mut in_target_section = false;
-
-        let ksv_tokens: Vec<&Token> = self
-            .tokens
-            .iter()
-            .filter(|t| {
-                matches!(
-                    t.kind,
-                    TokenKind::FieldKey | TokenKind::FieldSeparator | TokenKind::FieldValue
-                )
-            })
-            .collect();
-
-        for chunk in ksv_tokens.chunks_exact(3) {
-            let [key, sep, val] = chunk else {
-                continue;
-            };
-            if FieldKey::parse(&key.data) == FieldKey::Host {
-                in_target_section = val.data == host;
-            } else if in_target_section {
-                host_settings.add_field(Field {
-                    key: FieldKey::parse(&key.data),
-                    separator: sep.data.clone(),
-                    value: val.data.clone(),
-                });
-            }
-        }
-        return host_settings;
-    }
+    // Resolve the settings for a given `host` mimicking `ssh -G` behaviour.
+    // pub fn resolve_host_settings(&self, host: &str) -> HostSettings {
+    //     // TODO
+    // }
 }
 
 #[cfg(test)]
