@@ -8,8 +8,8 @@ pub struct Field {
 }
 
 pub struct HostSettings {
-    host: String,
-    fields: Vec<Field>
+    pub host: String,
+    pub fields: Vec<Field>,
 }
 
 impl HostSettings {
