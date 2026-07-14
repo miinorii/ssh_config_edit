@@ -110,6 +110,13 @@ impl Line {
         return Ok(lines);
     }
 
+    pub fn indent(&self) -> Option<&Token> {
+        match self {
+            Line::Directive(d) => d.indent.as_ref(),
+            Line::Comment { indent, .. } | Line::Blank { indent, .. } => indent.as_ref(),
+        }
+    }
+
     pub fn ending(&self) -> Option<&Token> {
         match self {
             Line::Directive(d) => d.ending.as_ref(),
