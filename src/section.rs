@@ -38,6 +38,10 @@ impl Section {
         }
         (preamble, sections)
     }
+
+    pub fn ending(&self) -> Option<&Token> {
+        self.header.ending.as_ref()
+    }
 }
 
 #[cfg(test)]
