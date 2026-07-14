@@ -24,15 +24,11 @@ impl SSHConfig {
     ///
     /// Default to '\n' if no line ending is found.
     fn infer_line_ending(&self) -> String {
-        self.preamble
+        self
+            .preamble
             .iter()
-            .filter_map(Line::ending)
-            .chain(
-                self.sections
-                    .iter()
-                    .filter_map(|s| s.header.ending.as_ref()),
-            )
-            .next()
+            .find_map(Line::ending)
+            .or_else(|| self.sections.iter().find_map(Section::ending))
             .map_or_else(|| DEFAULT_LINE_ENDING.to_string(), |t| t.data.clone())
     }
 
