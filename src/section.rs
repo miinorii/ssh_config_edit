@@ -77,6 +77,22 @@ mod tests {
         Section::parse_sections(lines)
     }
 
+    fn section_from(data: &str) -> Section {
+        let (_, mut sections) = parse(data);
+        sections.remove(0)
+    }
+
+    fn field_line(key: &str, value: &str, ending: &str) -> Line {
+        Line::Directive(
+            Directive::new(key, value)
+                .unwrap()
+                .with_indent("\t")
+                .unwrap()
+                .with_ending(ending)
+                .unwrap(),
+        )
+    }
+
     #[test]
     fn preamble_collects_lines_before_first_section() {
         let (preamble, sections) = parse("# c\nAddKeysToAgent yes\n\nHost a\n\tUser x\n");
@@ -102,5 +118,20 @@ mod tests {
         assert_eq!(sections.len(), 1);
         let out: String = sections.iter().map(|s| s.to_string()).collect();
         assert_eq!(out, data); // Section::Display round-trips header + body
+    }
+
+    #[test]
+    fn push_line_terminates_unterminated_header() {
+        let mut s = section_from("Host a");
+        s.push_line(field_line("User", "x", "\n"), "\n").unwrap();
+        assert_eq!(s.to_string(), "Host a\n\tUser x\n");
+    }
+
+    #[test]
+    fn push_line_terminates_unterminated_last_body_line() {
+        let mut s = section_from("Host a\n\tUser x");
+        s.push_line(field_line("Hostname", "1.2.3.4", "\n"), "\n")
+            .unwrap();
+        assert_eq!(s.to_string(), "Host a\n\tUser x\n\tHostname 1.2.3.4\n");
     }
 }
