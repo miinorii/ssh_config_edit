@@ -62,13 +62,7 @@ impl Directive {
     }
 
     pub fn with_ending(mut self, ending: &str) -> Result<Self, String> {
-        if ending != "\n" && ending != "\r\n" {
-            return Err("unexpected ending content: ending should be '\\n' or '\\r\\n'".into());
-        }
-        self.ending = Some(Token {
-            kind: TokenKind::LineEnding,
-            data: ending.to_string(),
-        });
+        self.ending = Some(ending_token(ending)?);
         Ok(self)
     }
 }
@@ -122,6 +116,15 @@ impl Line {
             Line::Directive(d) => d.ending.as_ref(),
             Line::Comment { ending, .. } | Line::Blank { ending, .. } => ending.as_ref(),
         }
+    }
+
+    pub fn set_ending(&mut self, ending: &str) -> Result<(), String> {
+        let token = ending_token(ending)?;
+        match self {
+            Line::Directive(d) => d.ending = Some(token),
+            Line::Comment { ending, .. } | Line::Blank { ending, .. } => *ending = Some(token),
+        }
+        Ok(())
     }
 
     /// Parse the next line from the token stream.
@@ -202,6 +205,16 @@ impl fmt::Display for Line {
 
 fn is_inline_ws(c: char) -> bool {
     c.is_whitespace() && c != '\n' && c != '\r'
+}
+
+fn ending_token(ending: &str) -> Result<Token, String> {
+    if ending != "\n" && ending != "\r\n" {
+        return Err("unexpected ending content: ending should be '\\n' or '\\r\\n'".into());
+    }
+    Ok(Token {
+        kind: TokenKind::LineEnding,
+        data: ending.to_string(),
+    })
 }
 
 #[cfg(test)]
