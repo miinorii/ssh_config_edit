@@ -5,17 +5,35 @@ use crate::section::Section;
 use crate::settings::{Field, HostSettings};
 use std::fmt;
 
-pub struct SshConfig {
+const DEFAULT_LINE_ENDING: &str = "\n";
+
+pub struct SSHConfig {
     preamble: Vec<Line>,
     sections: Vec<Section>,
 }
 
-impl SshConfig {
-    pub fn new(data: &str) -> Result<SshConfig, String> {
+impl SSHConfig {
+    pub fn new(data: &str) -> Result<SSHConfig, String> {
         let lexer = Lexer::new(&data);
         let lines = Line::parse_lines(lexer.tokenize()?)?;
         let (preamble, sections) = Section::parse_sections(lines);
-        return Ok(SshConfig { preamble, sections });
+        return Ok(SSHConfig { preamble, sections });
+    }
+
+    /// Infer line ending from the preamble and every section header.
+    ///
+    /// Default to '\n' if no line ending is found.
+    fn infer_line_ending(&self) -> String {
+        self.preamble
+            .iter()
+            .filter_map(Line::ending)
+            .chain(
+                self.sections
+                    .iter()
+                    .filter_map(|s| s.header.ending.as_ref()),
+            )
+            .next()
+            .map_or_else(|| DEFAULT_LINE_ENDING.to_string(), |t| t.data.clone())
     }
 
     pub fn set_host_settings(&mut self, host_settings: &HostSettings) -> Result<(), String> {
@@ -29,14 +47,15 @@ impl SshConfig {
                 // TODO handle partial edits
             }
             None => {
+                let line_ending = self.infer_line_ending();
                 let header = Directive::new(&FieldKey::Host.to_string(), &host_settings.host)?
-                    .with_ending("\n")?;
+                    .with_ending(&line_ending)?;
 
                 let mut body: Vec<Line> = Vec::new();
                 for field in &host_settings.fields {
                     let param = Directive::new(&field.key.to_string(), &field.value)?
                         .with_indent("\t")?
-                        .with_ending("\n")?;
+                        .with_ending(&line_ending)?;
                     body.push(Line::Directive(param));
                 }
                 self.sections.insert(0, Section { header, body });
@@ -76,7 +95,7 @@ impl SshConfig {
     // }
 }
 
-impl fmt::Display for SshConfig {
+impl fmt::Display for SSHConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for line in &self.preamble {
             write!(f, "{line}")?;
@@ -99,7 +118,7 @@ Host my.server.local
     Hostname 1.2.3.4
 ";
 
-        let config = SshConfig::new(data).unwrap();
+        let config = SSHConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.len(), 1);
 
@@ -115,7 +134,7 @@ Host my.server.local
     User test
 ";
 
-        let config = SshConfig::new(data).unwrap();
+        let config = SSHConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.len(), 2);
         assert!(host_params.contains_key(&FieldKey::Hostname));
@@ -132,7 +151,7 @@ Host my.server.local
     User second
 ";
 
-        let config = SshConfig::new(data).unwrap();
+        let config = SSHConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.len(), 1);
         assert!(host_params.contains_key(&FieldKey::User));
@@ -147,7 +166,7 @@ Host my.server.local
     IdentityFile ~/.ssh/fake_key2
 ";
 
-        let config = SshConfig::new(data).unwrap();
+        let config = SSHConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         let cumulative_params = host_params.get_multiple(&FieldKey::IdentityFile);
         assert_eq!(cumulative_params.len(), 2);
@@ -158,7 +177,7 @@ Host my.server.local
     #[test]
     fn match_options_do_not_leak_into_host() {
         let data = "Host a\n\tUser x\nMatch user foo\n\tPort 22\n";
-        let config = SshConfig::new(data).unwrap();
+        let config = SSHConfig::new(data).unwrap();
         let settings = config.exact_host_settings("a");
         assert_eq!(settings.len(), 1);
         assert!(!settings.contains_key(&FieldKey::Port));
@@ -166,7 +185,7 @@ Host my.server.local
 
     #[test]
     fn set_host_settings_creates_missing_host() {
-        let mut config = SshConfig::new("Host b\n\tUser bob\n").unwrap();
+        let mut config = SSHConfig::new("Host b\n\tUser bob\n").unwrap();
         let mut new_host = HostSettings::new("a");
         new_host.add_field(Field {
             key: FieldKey::Hostname,
@@ -182,7 +201,7 @@ Host my.server.local
 
     #[test]
     fn set_host_settings_on_empty_config() {
-        let mut config = SshConfig::new("").unwrap();
+        let mut config = SSHConfig::new("").unwrap();
         let mut new_host = HostSettings::new("a");
         new_host.add_field(Field {
             key: FieldKey::User,
@@ -228,6 +247,6 @@ Host my.server.local
             {lf}\
             {trailing_ws}"
         );
-        assert_eq!(SshConfig::new(&data).unwrap().to_string(), data);
+        assert_eq!(SSHConfig::new(&data).unwrap().to_string(), data);
     }
 }
