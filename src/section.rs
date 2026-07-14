@@ -3,7 +3,6 @@ use crate::lexer::Token;
 use crate::line::{Directive, Line};
 use std::fmt;
 
-
 pub struct Section {
     pub header: Directive,
     pub body: Vec<Line>,
@@ -42,7 +41,10 @@ impl Section {
     }
 
     pub fn indent(&self) -> Option<&Token> {
-        self.header.indent.as_ref().or_else(|| self.body.iter().find_map(Line::indent))
+        self.header
+            .indent
+            .as_ref()
+            .or_else(|| self.body.iter().find_map(Line::indent))
     }
 
     pub fn ending(&self) -> Option<&Token> {
