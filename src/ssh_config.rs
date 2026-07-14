@@ -132,9 +132,9 @@ impl SSHConfig {
     }
 
     // Resolve the settings for a given `host` mimicking `ssh -G` behaviour.
-    // pub fn resolve_host_settings(&self, host: &str) -> HostSettings {
-    //     // TODO
-    // }
+    pub fn resolve_host_settings(&self, host: &str) -> HostSettings {
+        todo!("no done yet");
+    }
 }
 
 impl fmt::Display for SSHConfig {
