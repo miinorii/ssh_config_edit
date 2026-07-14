@@ -73,7 +73,7 @@ impl SSHConfig {
                                         .with_indent(&inferred_indent)?
                                         .with_ending(&inferred_line_ending)?;
                                 let new_line = Line::Directive(new_directive);
-                                s.body.push(new_line);
+                                s.push_line(new_line, &inferred_line_ending)?;
                             }
                         }
                     }
@@ -90,14 +90,17 @@ impl SSHConfig {
                 let header = Directive::new(&FieldKey::Host.to_string(), &host_settings.host)?
                     .with_ending(&inferred_line_ending)?;
 
-                let mut body: Vec<Line> = Vec::new();
+                let mut new_section = Section {
+                    header,
+                    body: Vec::new(),
+                };
                 for field in &host_settings.fields {
                     let param = Directive::new(&field.key.to_string(), &field.value)?
                         .with_indent(DEFAULT_LINE_INDENT)?
                         .with_ending(&inferred_line_ending)?;
-                    body.push(Line::Directive(param));
+                    new_section.push_line(Line::Directive(param), &inferred_line_ending)?;
                 }
-                self.sections.insert(0, Section { header, body });
+                self.sections.insert(0, new_section);
             }
         }
         Ok(())
