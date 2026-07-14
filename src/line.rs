@@ -62,8 +62,13 @@ impl Directive {
     }
 
     pub fn with_ending(mut self, ending: &str) -> Result<Self, String> {
-        self.ending = Some(ending_token(ending)?);
+        self.set_ending(ending)?;
         Ok(self)
+    }
+
+    pub fn set_ending(&mut self, ending: &str) -> Result<(), String> {
+        self.ending = Some(ending_token(ending)?);
+        Ok(())
     }
 }
 
@@ -119,10 +124,12 @@ impl Line {
     }
 
     pub fn set_ending(&mut self, ending: &str) -> Result<(), String> {
-        let token = ending_token(ending)?;
         match self {
-            Line::Directive(d) => d.ending = Some(token),
-            Line::Comment { ending, .. } | Line::Blank { ending, .. } => *ending = Some(token),
+            Line::Directive(d) => d.set_ending(ending)?,
+            Line::Comment { ending: e, .. } | Line::Blank { ending: e, .. } => {
+                let token = ending_token(ending)?;
+                *e = Some(token);
+            },
         }
         Ok(())
     }
