@@ -129,7 +129,7 @@ impl Line {
             Line::Comment { ending: e, .. } | Line::Blank { ending: e, .. } => {
                 let token = ending_token(ending)?;
                 *e = Some(token);
-            },
+            }
         }
         Ok(())
     }
