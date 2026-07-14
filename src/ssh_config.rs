@@ -78,6 +78,13 @@ impl SSHConfig {
                         }
                     }
                 }
+                s.body.retain(|l| match l {
+                    Line::Directive(d) => host_settings
+                        .fields
+                        .iter()
+                        .any(|f| f.key == FieldKey::parse(&d.key.data)),
+                    _ => true,
+                });
             }
             None => {
                 // Add a line ending to the preamble's last line if none where found.
@@ -368,7 +375,7 @@ Host my.server.local
     #[test]
     fn set_appends_missing_key_matching_section_style() {
         let mut config = SSHConfig::new("Host a\r\n    User x\r\n").unwrap();
-        let mut settings = HostSettings::new("a");
+        let mut settings = config.exact_host_settings("a");
         settings.add_field(Field {
             key: FieldKey::Hostname,
             value: "1.2.3.4".into(),
@@ -425,6 +432,31 @@ Host my.server.local
         assert_eq!(
             config.to_string(),
             "AddKeysToAgent yes\nHost a\n\tUser me\n"
+        );
+    }
+
+    #[test]
+    fn set_removes_keys_absent_from_settings() {
+        let mut config = SSHConfig::new(
+            "Host a\n\t# keep me\n\tHostname 1.2.3.4\n\tForwardAgent yes\n\tUser x\nHost b\n\tForwardAgent yes\n",
+        )
+        .unwrap();
+
+        let mut settings = HostSettings::new("a");
+        settings.add_field(Field {
+            key: FieldKey::Hostname,
+            value: "1.2.3.4".into(),
+        });
+        settings.add_field(Field {
+            key: FieldKey::User,
+            value: "x".into(),
+        });
+        config.set_host_settings(&settings).unwrap();
+
+        // ForwardAgent removed from host 'a' only, comment and untouched keys keep their bytes
+        assert_eq!(
+            config.to_string(),
+            "Host a\n\t# keep me\n\tHostname 1.2.3.4\n\tUser x\nHost b\n\tForwardAgent yes\n"
         );
     }
 }
