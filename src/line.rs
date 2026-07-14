@@ -110,6 +110,13 @@ impl Line {
         return Ok(lines);
     }
 
+    pub fn ending(&self) -> Option<&Token> {
+        match self {
+            Line::Directive(d) => d.ending.as_ref(),
+            Line::Comment { ending, .. } | Line::Blank { ending, .. } => ending.as_ref(),
+        }
+    }
+
     /// Parse the next line from the token stream.
     ///
     /// Assume each line can either be one of the following pattern:
