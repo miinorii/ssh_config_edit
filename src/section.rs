@@ -50,6 +50,15 @@ impl Section {
     pub fn ending(&self) -> Option<&Token> {
         self.header.ending.as_ref()
     }
+
+    /// Append `line` to `self.body` and add a line terminator to the previous last line if none is set.
+    pub fn push_line(&mut self, line: Line, ending: &str) -> Result<(), String> {
+        if let Some(last_line) = self.body.last_mut() && last_line.ending().is_none() {
+            last_line.set_ending(ending)?;
+        }
+        self.body.push(line);
+        Ok(())
+    }
 }
 
 #[cfg(test)]
