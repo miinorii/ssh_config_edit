@@ -15,10 +15,10 @@ pub struct SSHConfig {
 
 impl SSHConfig {
     pub fn new(data: &str) -> Result<SSHConfig, String> {
-        let lexer = Lexer::new(&data);
+        let lexer = Lexer::new(data);
         let lines = Line::parse_lines(lexer.tokenize()?)?;
         let (preamble, sections) = Section::parse_sections(lines);
-        return Ok(SSHConfig { preamble, sections });
+        Ok(SSHConfig { preamble, sections })
     }
 
     /// Infer line ending from the preamble and every section header.
@@ -139,7 +139,7 @@ impl SSHConfig {
     }
 
     // Resolve the settings for a given `host` mimicking `ssh -G` behaviour.
-    pub fn resolve_host_settings(&self, host: &str) -> HostSettings {
+    pub fn resolve_host_settings(&self, _host: &str) -> HostSettings {
         todo!("no done yet");
     }
 }
@@ -373,7 +373,7 @@ Host my.server.local
     }
 
     #[test]
-    fn set_appends_missing_key_matching_section_style() {
+    fn set_append_key_matching_section_style() {
         let mut config = SSHConfig::new("Host a\r\n    User x\r\n").unwrap();
         let mut settings = config.exact_host_settings("a");
         settings.add_field(Field {

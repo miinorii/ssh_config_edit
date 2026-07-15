@@ -106,7 +106,7 @@ impl Line {
         while iter.peek().is_some() {
             lines.push(Self::parse_line(&mut iter)?);
         }
-        return Ok(lines);
+        Ok(lines)
     }
 
     pub fn indent(&self) -> Option<&Token> {
@@ -165,13 +165,13 @@ impl Line {
                     .next_if(|t| t.kind == TokenKind::FieldValue)
                     .ok_or("expected FieldValue")?;
                 let ending = iter.next_if(|t| t.kind == TokenKind::LineEnding);
-                return Ok(Line::Directive(Directive {
+                Ok(Line::Directive(Directive {
                     indent,
                     key,
                     sep,
                     value,
                     ending,
-                }));
+                }))
             }
             Some(other) => Err(format!("unexpected token: {other:?}")),
         }

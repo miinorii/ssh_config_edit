@@ -42,7 +42,7 @@ impl<'a> Lexer<'a> {
 
     #[inline]
     fn peek_next_char_offset(&mut self) -> usize {
-        return self.iter.peek().map(|&(o, _)| o).unwrap_or(self.data.len());
+        self.iter.peek().map(|&(offset, _)| offset).unwrap_or(self.data.len())
     }
 
     fn handle_whitespace(&mut self) -> Token {
@@ -57,10 +57,10 @@ impl<'a> Lexer<'a> {
             self.pos += 1;
             end = offset + char.len_utf8();
         }
-        return Token {
+        Token {
             kind: TokenKind::WhiteSpace,
             data: self.data[start..end].to_string(),
-        };
+        }
     }
 
     fn handle_comment(&mut self) -> Token {
@@ -77,10 +77,10 @@ impl<'a> Lexer<'a> {
             end = offset + char.len_utf8();
         }
 
-        return Token {
+        Token {
             kind: TokenKind::Comment,
             data: self.data[start..end].to_string(),
-        };
+        }
     }
 
     fn handle_newline(&mut self) -> Result<Token, String> {
@@ -89,10 +89,10 @@ impl<'a> Lexer<'a> {
             Some((offset, '\n')) => {
                 self.line += 1;
                 self.pos = 1;
-                return Ok(Token {
+                Ok(Token {
                     kind: TokenKind::LineEnding,
                     data: self.data[offset..offset + 1].to_string(),
-                });
+                })
             }
 
             // handle CRLF and improper format
@@ -102,27 +102,27 @@ impl<'a> Lexer<'a> {
                     Some((_, '\n')) => {
                         self.line += 1;
                         self.pos = 1;
-                        return Ok(Token {
+                        Ok(Token {
                             kind: TokenKind::LineEnding,
                             data: self.data[offset..offset + 2].to_string(),
-                        });
+                        })
                     }
                     Some((_, _)) | None => {
-                        return Err(format!(
+                        Err(format!(
                             "at ln:{} pos:{}, expected '\n'",
                             self.line,
                             self.pos + 1,
-                        ));
+                        ))
                     }
                 }
             }
 
             // catchall for improper data format
             Some((_, _)) | None => {
-                return Err(format!(
+                Err(format!(
                     "at ln:{} pos:{}, improper data format",
                     self.line, self.pos
-                ));
+                ))
             }
         }
     }
@@ -153,10 +153,10 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
-        return Ok(Token {
+        Ok(Token {
             kind: TokenKind::FieldKey,
             data: self.data[start..end].to_string(),
-        });
+        })
     }
 
     fn handle_field_separator(&mut self) -> Result<Token, String> {
@@ -205,10 +205,10 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
-        return Ok(Token {
+        Ok(Token {
             kind: TokenKind::FieldSeparator,
             data: self.data[start..end].to_string(),
-        });
+        })
     }
 
     fn handle_field_value(&mut self) -> Result<Token, String> {
@@ -251,10 +251,10 @@ impl<'a> Lexer<'a> {
                 self.line, self.pos
             ));
         }
-        return Ok(Token {
+        Ok(Token {
             kind: TokenKind::FieldValue,
             data: value_data,
-        });
+        })
     }
 
     /// https://man7.org/linux/man-pages/man5/ssh_config.5.html
