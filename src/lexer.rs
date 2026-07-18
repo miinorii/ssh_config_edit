@@ -42,7 +42,10 @@ impl<'a> Lexer<'a> {
 
     #[inline]
     fn peek_next_char_offset(&mut self) -> usize {
-        self.iter.peek().map(|&(offset, _)| offset).unwrap_or(self.data.len())
+        self.iter
+            .peek()
+            .map(|&(offset, _)| offset)
+            .unwrap_or(self.data.len())
     }
 
     fn handle_whitespace(&mut self) -> Token {
@@ -107,23 +110,19 @@ impl<'a> Lexer<'a> {
                             data: self.data[offset..offset + 2].to_string(),
                         })
                     }
-                    Some((_, _)) | None => {
-                        Err(format!(
-                            "at ln:{} pos:{}, expected '\n'",
-                            self.line,
-                            self.pos + 1,
-                        ))
-                    }
+                    Some((_, _)) | None => Err(format!(
+                        "at ln:{} pos:{}, expected '\n'",
+                        self.line,
+                        self.pos + 1,
+                    )),
                 }
             }
 
             // catchall for improper data format
-            Some((_, _)) | None => {
-                Err(format!(
-                    "at ln:{} pos:{}, improper data format",
-                    self.line, self.pos
-                ))
-            }
+            Some((_, _)) | None => Err(format!(
+                "at ln:{} pos:{}, improper data format",
+                self.line, self.pos
+            )),
         }
     }
 
