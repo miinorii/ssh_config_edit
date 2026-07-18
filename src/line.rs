@@ -38,15 +38,7 @@ impl Directive {
     }
 
     pub fn with_indent(mut self, indent: &str) -> Result<Self, String> {
-        if indent.chars().any(|c| !is_inline_ws(c)) || indent.is_empty() {
-            return Err(
-                "unexpected indent content: indent should be composed of whitespace only".into(),
-            );
-        }
-        self.indent = Some(Token {
-            kind: TokenKind::WhiteSpace,
-            data: indent.to_string(),
-        });
+        self.set_indent(indent)?;
         Ok(self)
     }
 
@@ -68,6 +60,11 @@ impl Directive {
 
     pub fn set_ending(&mut self, ending: &str) -> Result<(), String> {
         self.ending = Some(ending_token(ending)?);
+        Ok(())
+    }
+
+    pub fn set_indent(&mut self, indent: &str) -> Result<(), String> {
+        self.indent = Some(indent_token(indent)?);
         Ok(())
     }
 }
@@ -128,6 +125,17 @@ impl Line {
             Line::Directive(d) => d.set_ending(ending)?,
             Line::Comment { ending: e, .. } | Line::Blank { ending: e, .. } => {
                 let token = ending_token(ending)?;
+                *e = Some(token);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn set_indent(&mut self, indent: &str) -> Result<(), String> {
+        match self {
+            Line::Directive(d) => d.set_indent(indent)?,
+            Line::Comment { indent: e, .. } | Line::Blank { indent: e, .. } => {
+                let token = indent_token(indent)?;
                 *e = Some(token);
             }
         }
@@ -221,6 +229,18 @@ fn ending_token(ending: &str) -> Result<Token, String> {
     Ok(Token {
         kind: TokenKind::LineEnding,
         data: ending.to_string(),
+    })
+}
+
+fn indent_token(indent: &str) -> Result<Token, String> {
+    if indent.chars().any(|c| !is_inline_ws(c)) || indent.is_empty() {
+        return Err(
+            "unexpected indent content: indent should be composed of whitespace only".into(),
+        );
+    }
+    Ok(Token {
+        kind: TokenKind::WhiteSpace,
+        data: indent.to_string(),
     })
 }
 
