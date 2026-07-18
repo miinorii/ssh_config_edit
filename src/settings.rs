@@ -32,8 +32,7 @@ impl HostSettings {
 
     /// Access a singular field value corresponding to a case-insensitive key
     pub fn get_one(&self, key: &FieldKey) -> Option<&str> {
-        self
-            .fields
+        self.fields
             .iter()
             .find(|f| f.key == *key)
             .map(|f| f.value.as_str())
@@ -41,8 +40,7 @@ impl HostSettings {
 
     /// Access multiple fields values corresponding to a case-insensitive key
     pub fn get_multiple(&self, key: &FieldKey) -> Vec<&str> {
-        self
-            .fields
+        self.fields
             .iter()
             .filter(|f| f.key == *key)
             .map(|f| f.value.as_str())
