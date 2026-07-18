@@ -1,12 +1,9 @@
 use crate::field_keys::FieldKey;
 use crate::lexer::Lexer;
 use crate::line::{Directive, Line};
-use crate::section::Section;
+use crate::section::{DEFAULT_LINE_ENDING, Section};
 use crate::settings::{Field, HostSettings};
 use std::fmt;
-
-const DEFAULT_LINE_ENDING: &str = "\n";
-const DEFAULT_LINE_INDENT: &str = "\t";
 
 pub struct SSHConfig {
     preamble: Vec<Line>,
@@ -41,43 +38,39 @@ impl SSHConfig {
 
         match target_section {
             Some(s) => {
-                let inferred_indent = s
-                    .indent()
-                    .map_or_else(|| DEFAULT_LINE_INDENT.to_string(), |t| t.data.clone());
-                for field in &host_settings.fields {
-                    if field.key.is_cumulative() {
-                        todo!("no done yet");
-                    } else {
-                        // Try to find an existing key in every Line::Directive.
-                        //
-                        // If found, replace its value non-destructively, otherwise create a new Line.
-                        // That way, blank line and comments are preserved.
-                        //
-                        // When creating a new Line, indent is inferred from the target Section
-                        // and line ending is inferred from every Line.
-                        let existing_line = s.body.iter_mut().find_map(|l| match l {
-                            Line::Directive(d) if FieldKey::parse(&d.key.data) == field.key => {
-                                Some(d)
-                            }
-                            _ => None,
-                        });
+                for field in host_settings
+                    .fields
+                    .iter()
+                    .filter(|f| !f.key.is_cumulative())
+                {
+                    // Try to find an existing key in every Line::Directive.
+                    //
+                    // If found, replace its value non-destructively, otherwise create a new Line.
+                    // That way, blank line and comments are preserved.
+                    //
+                    // When creating a new Line, indent is inferred from the target Section
+                    // and line ending is inferred from every Line.
+                    let existing_line = s.body.iter_mut().find_map(|l| match l {
+                        Line::Directive(d) if FieldKey::parse(&d.key.data) == field.key => Some(d),
+                        _ => None,
+                    });
 
-                        match existing_line {
-                            // Line exist -> in-place edit
-                            Some(l) => l.value.data = field.value.clone(),
+                    match existing_line {
+                        // Line exist -> in-place edit
+                        Some(l) => l.value.data = field.value.clone(),
 
-                            // Line does not exist, create one and append it to the Section
-                            _ => {
-                                let new_directive =
-                                    Directive::new(field.key.as_canonical_str(), &field.value)?
-                                        .with_indent(&inferred_indent)?
-                                        .with_ending(&inferred_line_ending)?;
-                                let new_line = Line::Directive(new_directive);
-                                s.push_line(new_line, &inferred_line_ending)?;
-                            }
+                        // Line does not exist, create one and append it to the Section
+                        _ => {
+                            let new_directive =
+                                Directive::new(field.key.as_canonical_str(), &field.value)?;
+                            let new_line = Line::Directive(new_directive);
+                            s.push_line(new_line)?;
                         }
                     }
                 }
+
+                // Remove lines from the target Section that are not in host_settings.
+                // Preserve comments and empty lines.
                 s.body.retain(|l| match l {
                     Line::Directive(d) => host_settings
                         .fields
@@ -87,29 +80,39 @@ impl SSHConfig {
                 });
             }
             None => {
-                // Add a line ending to the preamble's last line if none where found.
-                if let Some(last_line) = self.preamble.last_mut()
-                    && last_line.ending().is_none()
-                {
-                    last_line.set_ending(&inferred_line_ending)?;
-                }
-
                 let header = Directive::new(&FieldKey::Host.to_string(), &host_settings.host)?
                     .with_ending(&inferred_line_ending)?;
 
-                let mut new_section = Section {
-                    header,
-                    body: Vec::new(),
-                };
+                let mut new_section = Section::new(header).with_ending(&inferred_line_ending);
                 for field in &host_settings.fields {
-                    let param = Directive::new(&field.key.to_string(), &field.value)?
-                        .with_indent(DEFAULT_LINE_INDENT)?
-                        .with_ending(&inferred_line_ending)?;
-                    new_section.push_line(Line::Directive(param), &inferred_line_ending)?;
+                    let param = Directive::new(&field.key.to_string(), &field.value)?;
+                    new_section.push_line(Line::Directive(param))?;
                 }
-                self.sections.insert(0, new_section);
+                self.insert_section(0, new_section)?;
             }
         }
+        Ok(())
+    }
+
+    fn insert_section(&mut self, index: usize, section: Section) -> Result<(), String> {
+        // Boundary check
+        if index > self.sections.len() {
+            return Err("supplied index > sections count".into());
+        }
+
+        // Ensure previous last line has a line ending
+        if index == self.sections.len() {
+            let ending = self.infer_line_ending();
+            if let Some(prev) = self.sections.last_mut() {
+                prev.terminate(&ending)?;
+            } else if let Some(last_line) = self.preamble.last_mut()
+                && last_line.ending().is_none()
+            {
+                last_line.set_ending(&ending)?;
+            }
+        }
+
+        self.sections.insert(index, section);
         Ok(())
     }
 
