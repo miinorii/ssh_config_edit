@@ -3,7 +3,12 @@ use crate::lexer::Token;
 use crate::line::{Directive, Line};
 use std::fmt;
 
+#[cfg(target_os = "windows")]
+pub const DEFAULT_LINE_ENDING: &str = "\r\n";
+
+#[cfg(not(target_os = "windows"))]
 pub const DEFAULT_LINE_ENDING: &str = "\n";
+
 pub const DEFAULT_LINE_INDENT: &str = "\t";
 
 pub struct Section {
@@ -57,6 +62,11 @@ impl Section {
                     None => preamble.push(line),
                 },
             }
+        }
+
+        for section in sections.iter_mut() {
+            section.default_ending =  section.infer_line_ending();
+            section.default_indent =  section.infer_line_indent();
         }
         (preamble, sections)
     }
