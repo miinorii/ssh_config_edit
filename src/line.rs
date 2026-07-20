@@ -281,7 +281,8 @@ impl<'a, I: Iterator<Item = &'a Line>> LineIterExt<'a> for I {
     }
 
     fn cumulative_directives(self) -> impl Iterator<Item = &'a Directive> {
-        self.filter_map(|l| l.as_directive()).filter(|d| d.is_cumulative())
+        self.filter_map(|l| l.as_directive())
+            .filter(|d| d.is_cumulative())
     }
 }
 
@@ -295,7 +296,8 @@ impl<'a, I: Iterator<Item = &'a mut Line>> LineIterMutExt<'a> for I {
     }
 
     fn cumulative_directives_mut(self) -> impl Iterator<Item = &'a mut Directive> {
-        self.filter_map(|l| l.as_directive_mut()).filter(|d| d.is_cumulative())
+        self.filter_map(|l| l.as_directive_mut())
+            .filter(|d| d.is_cumulative())
     }
 }
 
@@ -309,7 +311,8 @@ impl<I: Iterator<Item = Line>> LineIntoIterExt for I {
     }
 
     fn into_cumulative_directives(self) -> impl Iterator<Item = Directive> {
-        self.filter_map(|l| l.into_directive()).filter(|d| d.is_cumulative())
+        self.filter_map(|l| l.into_directive())
+            .filter(|d| d.is_cumulative())
     }
 }
 
