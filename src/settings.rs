@@ -1,4 +1,6 @@
 use crate::field_keys::FieldKey;
+use std::collections::HashMap;
+
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Field {
@@ -45,6 +47,18 @@ impl HostSettings {
             .filter(|f| f.key == *key)
             .map(|f| f.value.as_str())
             .collect()
+    }
+
+    pub fn cumulative_fields(&self) -> HashMap<&FieldKey, Vec<&Field>> {
+        let mut cumul_key_to_value: HashMap<&FieldKey, Vec<&Field>> = HashMap::new();
+        for field in self
+            .fields
+            .iter()
+            .filter(|f| f.key.is_cumulative())
+        {
+            cumul_key_to_value.entry(&field.key).or_default().push(field);
+        }
+        cumul_key_to_value
     }
 
     #[inline]
