@@ -65,8 +65,8 @@ impl Section {
         }
 
         for section in sections.iter_mut() {
-            section.default_ending =  section.infer_line_ending();
-            section.default_indent =  section.infer_line_indent();
+            section.default_ending = section.infer_line_ending();
+            section.default_indent = section.infer_line_indent();
         }
         (preamble, sections)
     }
@@ -149,7 +149,7 @@ mod tests {
             Directive::new(key, value)
                 .unwrap()
                 .with_indent("\t")
-                .unwrap()
+                .unwrap(),
         )
     }
 
@@ -186,14 +186,13 @@ mod tests {
         s.push_line(field_line("User", "x")).unwrap();
 
         let ending = DEFAULT_LINE_ENDING;
-        assert_eq!(s.to_string(), format!("Host a{ending}\tUser x{ending}", ));
+        assert_eq!(s.to_string(), format!("Host a{ending}\tUser x{ending}",));
     }
 
     #[test]
     fn push_line_terminates_unterminated_last_body_line() {
         let mut s = section_from("Host a\n\tUser x");
-        s.push_line(field_line("Hostname", "1.2.3.4"))
-            .unwrap();
+        s.push_line(field_line("Hostname", "1.2.3.4")).unwrap();
         assert_eq!(s.to_string(), "Host a\n\tUser x\n\tHostname 1.2.3.4\n");
     }
 }
