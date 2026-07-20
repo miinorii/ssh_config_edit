@@ -144,14 +144,12 @@ mod tests {
         sections.remove(0)
     }
 
-    fn field_line(key: &str, value: &str, ending: &str) -> Line {
+    fn field_line(key: &str, value: &str) -> Line {
         Line::Directive(
             Directive::new(key, value)
                 .unwrap()
                 .with_indent("\t")
                 .unwrap()
-                .with_ending(ending)
-                .unwrap(),
         )
     }
 
@@ -185,14 +183,16 @@ mod tests {
     #[test]
     fn push_line_terminates_unterminated_header() {
         let mut s = section_from("Host a");
-        s.push_line(field_line("User", "x", "\n")).unwrap();
-        assert_eq!(s.to_string(), "Host a\n\tUser x\n");
+        s.push_line(field_line("User", "x")).unwrap();
+
+        let ending = DEFAULT_LINE_ENDING;
+        assert_eq!(s.to_string(), format!("Host a{ending}\tUser x{ending}", ));
     }
 
     #[test]
     fn push_line_terminates_unterminated_last_body_line() {
         let mut s = section_from("Host a\n\tUser x");
-        s.push_line(field_line("Hostname", "1.2.3.4", "\n"))
+        s.push_line(field_line("Hostname", "1.2.3.4"))
             .unwrap();
         assert_eq!(s.to_string(), "Host a\n\tUser x\n\tHostname 1.2.3.4\n");
     }

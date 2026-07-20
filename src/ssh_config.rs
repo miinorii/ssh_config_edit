@@ -419,7 +419,8 @@ Host my.server.local
         });
         config.set_host_settings(&settings).unwrap();
 
-        assert_eq!(config.to_string(), "Host a\n\tUser me\n");
+        let ending = DEFAULT_LINE_ENDING;
+        assert_eq!(config.to_string(), format!("Host a{ending}\tUser me{ending}"));
     }
 
     #[test]
@@ -432,9 +433,10 @@ Host my.server.local
         });
         config.set_host_settings(&settings).unwrap();
 
+        let ending = DEFAULT_LINE_ENDING;
         assert_eq!(
             config.to_string(),
-            "AddKeysToAgent yes\nHost a\n\tUser me\n"
+            format!("AddKeysToAgent yes{ending}Host a{ending}\tUser me{ending}")
         );
     }
 
