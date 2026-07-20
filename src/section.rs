@@ -31,7 +31,7 @@ impl fmt::Display for Section {
 impl Section {
     pub fn new(header: Directive) -> Self {
         Self {
-            header: header,
+            header,
             body: Vec::new(),
             default_indent: DEFAULT_LINE_INDENT.into(),
             default_ending: DEFAULT_LINE_ENDING.into(),
