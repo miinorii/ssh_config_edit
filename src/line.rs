@@ -244,6 +244,43 @@ fn indent_token(indent: &str) -> Result<Token, String> {
     })
 }
 
+pub trait LineIterExt<'a> {
+    fn directives(self) -> impl Iterator<Item = &'a Directive>;
+}
+
+impl<'a, I: Iterator<Item = &'a Line>> LineIterExt<'a> for I {
+    fn directives(self) -> impl Iterator<Item = &'a Directive> {
+        self.filter_map(|l| match l {
+            Line::Directive(d) => Some(d),
+            _ => None,
+        })
+    }
+}
+
+pub trait LineIterMutExt<'a> {
+    fn directives_mut(self) -> impl Iterator<Item = &'a mut Directive>;
+}
+impl<'a, I: Iterator<Item = &'a mut Line>> LineIterMutExt<'a> for I {
+    fn directives_mut(self) -> impl Iterator<Item = &'a mut Directive> {
+        self.filter_map(|l| match l {
+            Line::Directive(d) => Some(d),
+            _ => None,
+        })
+    }
+}
+
+pub trait LineIntoIterExt {
+    fn into_directives(self) -> impl Iterator<Item = Directive>;
+}
+impl<I: Iterator<Item = Line>> LineIntoIterExt for I {
+    fn into_directives(self) -> impl Iterator<Item = Directive> {
+        self.filter_map(|l| match l {
+            Line::Directive(d) => Some(d),
+            _ => None,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
