@@ -1,4 +1,5 @@
 use crate::lexer::{Token, TokenKind};
+use crate::field_keys::FieldKey;
 use std::{fmt, iter::Peekable, vec};
 
 pub struct Directive {
@@ -245,37 +246,61 @@ fn indent_token(indent: &str) -> Result<Token, String> {
 }
 
 pub trait LineIterExt<'a> {
-    fn directives(self) -> impl Iterator<Item = &'a Directive>;
+    fn any_directives(self) -> impl Iterator<Item = &'a Directive>;
+    fn cumulative_directives(self) -> impl Iterator<Item = &'a Directive>;
 }
 
 impl<'a, I: Iterator<Item = &'a Line>> LineIterExt<'a> for I {
-    fn directives(self) -> impl Iterator<Item = &'a Directive> {
+    fn any_directives(self) -> impl Iterator<Item = &'a Directive> {
         self.filter_map(|l| match l {
             Line::Directive(d) => Some(d),
+            _ => None,
+        })
+    }
+
+    fn cumulative_directives(self) -> impl Iterator<Item = &'a Directive> {
+        self.filter_map(|l| match l {
+            Line::Directive(d) if FieldKey::parse(&d.key.data).is_cumulative() => Some(d),
             _ => None,
         })
     }
 }
 
 pub trait LineIterMutExt<'a> {
-    fn directives_mut(self) -> impl Iterator<Item = &'a mut Directive>;
+    fn any_directives_mut(self) -> impl Iterator<Item = &'a mut Directive>;
+    fn cumulative_directives_mut(self) -> impl Iterator<Item = &'a mut Directive>;
 }
 impl<'a, I: Iterator<Item = &'a mut Line>> LineIterMutExt<'a> for I {
-    fn directives_mut(self) -> impl Iterator<Item = &'a mut Directive> {
+    fn any_directives_mut(self) -> impl Iterator<Item = &'a mut Directive> {
         self.filter_map(|l| match l {
             Line::Directive(d) => Some(d),
+            _ => None,
+        })
+    }
+
+    fn cumulative_directives_mut(self) -> impl Iterator<Item = &'a mut Directive> {
+        self.filter_map(|l| match l {
+            Line::Directive(d) if FieldKey::parse(&d.key.data).is_cumulative() => Some(d),
             _ => None,
         })
     }
 }
 
 pub trait LineIntoIterExt {
-    fn into_directives(self) -> impl Iterator<Item = Directive>;
+    fn into_any_directives(self) -> impl Iterator<Item = Directive>;
+    fn into_cumulative_directives(self) -> impl Iterator<Item = Directive>;
 }
 impl<I: Iterator<Item = Line>> LineIntoIterExt for I {
-    fn into_directives(self) -> impl Iterator<Item = Directive> {
+    fn into_any_directives(self) -> impl Iterator<Item = Directive> {
         self.filter_map(|l| match l {
             Line::Directive(d) => Some(d),
+            _ => None,
+        })
+    }
+
+    fn into_cumulative_directives(self) -> impl Iterator<Item = Directive> {
+        self.filter_map(|l| match l {
+            Line::Directive(d) if FieldKey::parse(&d.key.data).is_cumulative() => Some(d),
             _ => None,
         })
     }
