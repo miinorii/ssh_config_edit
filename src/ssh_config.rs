@@ -526,4 +526,116 @@ Host my.server.local
             "Host a\n\t# keep me\n\tHostname 1.2.3.4\n\tUser x\nHost b\n\tForwardAgent yes\n"
         );
     }
+
+    #[test]
+    fn cumulative_valid_preserved_divergence_appended() {
+        let mut config = SSHConfig::new(
+            "Host a\n\tIdentityFile ~/.ssh/key1\n\tIdentityFile ~/.ssh/key2\n",
+        ).unwrap();
+
+        let mut settings = HostSettings::new("a");
+        settings.add_field(Field { key: FieldKey::IdentityFile, value: "~/.ssh/key1".into() });
+        settings.add_field(Field { key: FieldKey::IdentityFile, value: "~/.ssh/keyX".into() });
+        config.set_host_settings(&settings).unwrap();
+
+        // key1 line kept in place
+        // key2 removed
+        // keyX appended
+        assert_eq!(
+            config.to_string(),
+            "Host a\n\tIdentityFile ~/.ssh/key1\n\tIdentityFile ~/.ssh/keyX\n"
+        );
+    }
+
+    #[test]
+    fn cumulative_divergence_preserves_desired_order() {
+        let mut config = SSHConfig::new(
+            "Host a\n\tIdentityFile A\n\tIdentityFile B\n\tIdentityFile C\n",
+        ).unwrap();
+
+        let mut settings = HostSettings::new("a");
+        for v in ["A", "X", "C"] {
+            settings.add_field(Field { key: FieldKey::IdentityFile, value: v.into() });
+        }
+        config.set_host_settings(&settings).unwrap();
+
+        // valid_count=1 
+        // A kept
+        // B and C dropped
+        // X and C appended in order
+        assert_eq!(
+            config.to_string(),
+            "Host a\n\tIdentityFile A\n\tIdentityFile X\n\tIdentityFile C\n"
+        );
+    }
+
+    #[test]
+    fn cumulative_shrink_removes_extra() {
+        let mut config = SSHConfig::new("Host a\n\tIdentityFile A\n\tIdentityFile B\n").unwrap();
+
+        let mut settings = HostSettings::new("a");
+        settings.add_field(Field { key: FieldKey::IdentityFile, value: "A".into() });
+        config.set_host_settings(&settings).unwrap();
+
+        assert_eq!(config.to_string(), "Host a\n\tIdentityFile A\n");
+    }
+
+    #[test]
+    fn cumulative_grow_appends_new() {
+        let mut config = SSHConfig::new("Host a\n\tIdentityFile A\n").unwrap();
+
+        let mut settings = HostSettings::new("a");
+        settings.add_field(Field { key: FieldKey::IdentityFile, value: "A".into() });
+        settings.add_field(Field { key: FieldKey::IdentityFile, value: "B".into() });
+        config.set_host_settings(&settings).unwrap();
+
+        assert_eq!(config.to_string(), "Host a\n\tIdentityFile A\n\tIdentityFile B\n");
+    }
+
+    #[test]
+    fn cumulative_full_match_noop() {
+        let data = "Host a\n    IdentityFile A\n    # note\n    IdentityFile B\n";
+        let mut config = SSHConfig::new(data).unwrap();
+
+        let mut settings = HostSettings::new("a");
+        settings.add_field(Field { key: FieldKey::IdentityFile, value: "A".into() });
+        settings.add_field(Field { key: FieldKey::IdentityFile, value: "B".into() });
+        config.set_host_settings(&settings).unwrap();
+
+        assert_eq!(config.to_string(), data);
+    }
+
+    #[test]
+    fn cumulative_key_absent_from_desired_is_removed() {
+        let mut config = SSHConfig::new(
+            "Host a\n\tIdentityFile A\n\tIdentityFile B\n\tUser bob\n",
+        ).unwrap();
+
+        let mut settings = HostSettings::new("a");
+        settings.add_field(Field { key: FieldKey::User, value: "bob".into() });
+        config.set_host_settings(&settings).unwrap();
+
+        assert_eq!(config.to_string(), "Host a\n\tUser bob\n");
+    }
+
+    #[test]
+    fn cumulative_interleaved_keys_both_diverge() {
+        let mut config = SSHConfig::new(
+            "Host a\n\tSetEnv A=1\n\tIdentityFile k1\n\tSetEnv B=2\n\tIdentityFile k2\n",
+        ).unwrap();
+
+        // IdentityFile added first -> processed first -> to_remove pushed as [3, 2] (non-ascending)
+        let mut settings = HostSettings::new("a");
+        settings.add_field(Field { key: FieldKey::IdentityFile, value: "k1".into() });
+        settings.add_field(Field { key: FieldKey::IdentityFile, value: "kX".into() });
+        settings.add_field(Field { key: FieldKey::SetEnv, value: "A=1".into() });
+        settings.add_field(Field { key: FieldKey::SetEnv, value: "B=9".into() });
+        config.set_host_settings(&settings).unwrap();
+
+        assert_eq!(
+            config.to_string(),
+            "Host a\n\tSetEnv A=1\n\tIdentityFile k1\n\tIdentityFile kX\n\tSetEnv B=9\n"
+        );
+    }
+
 }
