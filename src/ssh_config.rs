@@ -51,6 +51,9 @@ impl SSHConfig {
                     }
                 }
 
+                // Preserve cumulative keys until a divergence is observed (a new/different value).
+                // When a divergence is observed start appending the fields 
+                // at the end of the current section.
                 let mut to_remove: Vec<usize> = Vec::new();
                 let mut seen: HashSet<&FieldKey> = HashSet::new();
                 for field in host_settings
