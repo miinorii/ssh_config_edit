@@ -1,14 +1,80 @@
 use crate::error::{Error, Result};
 use crate::field_keys::FieldKey;
-use crate::lexer::{Token, TokenKind};
+use crate::lexer::LexItem;
 use std::{fmt, iter::Peekable, vec};
 
+fn is_inline_ws(c: char) -> bool {
+    c.is_whitespace() && c != '\n' && c != '\r'
+}
+
+#[derive(Default)]
+struct Decor {
+    indent: Option<String>,
+    ending: Option<String>,
+}
+
+impl Decor {
+    fn indent(&self) -> Option<&str> {
+        self.indent.as_deref()
+    }
+
+    fn set_indent(&mut self, indent: &str) -> Result<()> {
+        if indent.chars().any(|c| !is_inline_ws(c)) || indent.is_empty() {
+            return Err(Error::InvalidIndent(indent.into()));
+        }
+        self.indent.insert(indent.into());
+        Ok(())
+    }
+
+    fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
+        if self.indent.is_none() {
+            self.set_indent(indent)?;
+        }
+        Ok(())
+    }
+
+    fn with_indent(mut self, indent: &str) -> Result<Self> {
+        self.set_indent(indent)?;
+        Ok(self)
+    }
+
+    pub(crate) fn write_indent(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.indent().unwrap_or(""))
+    }
+
+    fn ending(&self) -> Option<&str> {
+        self.ending.as_deref()
+    }
+
+    fn set_ending(&mut self, ending: &str) -> Result<()> {
+        if ending != "\n" && ending != "\r\n" {
+            return Err(Error::InvalidLineEnding(ending.into()));
+        }
+        self.ending.insert(ending.into());
+        Ok(())
+    }
+
+    fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
+        if self.ending.is_none() {
+            self.set_ending(ending)?;
+        }
+        Ok(())
+    }
+
+    fn with_ending(mut self, ending: &str) -> Result<Self> {
+        self.set_ending(ending)?;
+        Ok(self)
+    }
+
+    pub(crate) fn write_ending(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.ending().unwrap_or(""))
+    }
+}
+
 pub struct Directive {
-    pub indent: Option<Token>,
-    pub key: Token,
-    pub sep: Token,
-    pub value: Token,
-    pub ending: Option<Token>,
+    key: String,
+    sep: String,
+    value: String,
 }
 
 impl Directive {
@@ -22,17 +88,34 @@ impl Directive {
         }
 
         Ok(Self {
-            indent: None,
-            key: Token::synthetic(TokenKind::FieldKey, key.into()),
-            sep: Token::synthetic(TokenKind::FieldSeparator, " ".into()),
-            value: Token::synthetic(TokenKind::FieldValue, value.into()),
-            ending: None,
+            key: key.into(),
+            sep: " ".into(),
+            value: value.into(),
         })
     }
 
-    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
-        self.set_indent(indent)?;
-        Ok(self)
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    pub fn field_key(&self) -> FieldKey {
+        FieldKey::parse(&self.key)
+    }
+
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    pub fn set_value(&mut self, value: &str) -> Result<()> {
+        if value.len() == 0 || value.chars().all(char::is_whitespace) {
+            return Err(Error::EmptyValue);
+        }
+        self.value = value.into();
+        Ok(())
+    }
+
+    pub fn separator(&self) -> &str {
+        &self.sep
     }
 
     pub fn with_sep(mut self, sep: &str) -> Result<Self> {
@@ -42,101 +125,83 @@ impl Directive {
         {
             return Err(Error::InvalidSeparator(sep.into()));
         }
-        self.sep.data = sep.into();
+        self.sep = sep.into();
         Ok(self)
-    }
-
-    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
-        self.set_ending(ending)?;
-        Ok(self)
-    }
-
-    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
-        self.ending = Some(ending_token(ending)?);
-        Ok(())
-    }
-
-    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
-        self.indent = Some(indent_token(indent)?);
-        Ok(())
     }
 
     pub fn is_cumulative(&self) -> bool {
-        FieldKey::parse(&self.key.data).is_cumulative()
+        FieldKey::parse(&self.key).is_cumulative()
     }
 }
 
 impl fmt::Display for Directive {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(indent) = &self.indent {
-            write!(f, "{indent}")?;
-        }
         write!(f, "{}{}{}", &self.key, &self.sep, &self.value)?;
-        if let Some(ending) = &self.ending {
-            write!(f, "{ending}")?;
-        }
         Ok(())
     }
 }
 
-pub enum Line {
+struct Selector {
+    decor: Decor,
+    sep: String,
+    keyword: String,
+    value: String,
+}
+
+pub struct Line {
+    decor: Decor,
+    kind: LineKind,
+}
+
+enum LineKind {
     Directive(Directive),
-    Comment {
-        indent: Option<Token>,
-        text: Token,
-        ending: Option<Token>,
-    },
-    Blank {
-        indent: Option<Token>,
-        ending: Option<Token>,
-    },
+    Comment(String),
+    Blank,
 }
 
 impl Line {
+    pub fn indent(&self) -> Option<&str> {
+        self.decor.indent()
+    }
+
+    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
+        self.decor.set_indent(indent)
+    }
+
+    pub fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
+        self.decor.set_indent_if_absent(indent)
+    }
+
+    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
+        self.decor.set_indent(indent)?;
+        Ok(self)
+    }
+
+    pub fn ending(&self) -> Option<&str> {
+        self.decor.ending()
+    }
+
+    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
+        self.decor.set_ending(ending)
+    }
+
+    pub fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
+        self.decor.set_ending_if_absent(ending)
+    }
+
+    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
+        self.decor.set_ending(ending)?;
+        Ok(self)
+    }
+
     /// Parse multiple `Line` from a `Vec<Token>`.
-    pub fn parse_lines(tokens: Vec<Token>) -> Result<Vec<Self>> {
-        let mut iter = tokens.into_iter().peekable();
+    pub(crate) fn parse_lines(items: Vec<LexItem>) -> Result<Vec<Self>> {
+        let mut iter = items.into_iter().peekable();
         let mut lines: Vec<Self> = Vec::new();
         while iter.peek().is_some() {
             lines.push(Self::parse_line(&mut iter)?);
         }
         Ok(lines)
-    }
-
-    pub fn indent(&self) -> Option<&Token> {
-        match self {
-            Line::Directive(d) => d.indent.as_ref(),
-            Line::Comment { indent, .. } | Line::Blank { indent, .. } => indent.as_ref(),
-        }
-    }
-
-    pub fn ending(&self) -> Option<&Token> {
-        match self {
-            Line::Directive(d) => d.ending.as_ref(),
-            Line::Comment { ending, .. } | Line::Blank { ending, .. } => ending.as_ref(),
-        }
-    }
-
-    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
-        match self {
-            Line::Directive(d) => d.set_ending(ending)?,
-            Line::Comment { ending: e, .. } | Line::Blank { ending: e, .. } => {
-                let token = ending_token(ending)?;
-                *e = Some(token);
-            }
-        }
-        Ok(())
-    }
-
-    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
-        match self {
-            Line::Directive(d) => d.set_indent(indent)?,
-            Line::Comment { indent: e, .. } | Line::Blank { indent: e, .. } => {
-                let token = indent_token(indent)?;
-                *e = Some(token);
-            }
-        }
-        Ok(())
     }
 
     /// Parse the next line from the token stream.
@@ -149,56 +214,49 @@ impl Line {
     /// - `line_ending`
     ///
     /// Optionnal token are denoted with `[]`
-    fn parse_line(iter: &mut Peekable<vec::IntoIter<Token>>) -> Result<Line> {
-        let indent = iter.next_if(|t| t.kind == TokenKind::WhiteSpace);
-        match iter.peek().map(|t| &t.kind) {
-            Some(TokenKind::Comment) => Ok(Line::Comment {
-                indent,
-                text: iter.next().unwrap(),
-                ending: iter.next_if(|t| t.kind == TokenKind::LineEnding),
-            }),
-            Some(TokenKind::LineEnding) | None => Ok(Line::Blank {
-                indent,
-                ending: iter.next(), // None if EOF
-            }),
-            Some(TokenKind::FieldKey) => {
-                let key = iter.next().expect("peeked a FIeldKey");
-                let sep = iter
-                    .next_if(|t| t.kind == TokenKind::FieldSeparator)
-                    .expect("tokenize emits FieldSeparator immediately after FieldKey");
-                let value = iter
-                    .next_if(|t| t.kind == TokenKind::FieldValue)
-                    .expect("tokenize emits FieldValue immediately after FieldSeparator");
-                let ending = iter.next_if(|t| t.kind == TokenKind::LineEnding);
-                Ok(Line::Directive(Directive {
-                    indent,
-                    key,
-                    sep,
-                    value,
-                    ending,
-                }))
+    fn parse_line(iter: &mut Peekable<vec::IntoIter<LexItem>>) -> Result<Line> {
+        let indent = iter
+            .next_if(|i| matches!(i, LexItem::Indent(_)))
+            .and_then(LexItem::into_indent);
+
+        // an Ending here means the line has no content
+        let kind = match iter.next_if(|i| !matches!(i, LexItem::Ending(_))) {
+            Some(LexItem::Comment(text)) => LineKind::Comment(text),
+            Some(LexItem::Directive { key, sep, value }) => {
+                LineKind::Directive(Directive::new(&key, &value)?.with_sep(&sep)?)
             }
-            Some(other) => unreachable!(),
+            Some(LexItem::Indent(_)) => unreachable!("indent already checked"),
+            Some(LexItem::Ending(_)) => unreachable!("excluded by next_if"),
+            None => LineKind::Blank,
+        };
+
+        let ending = iter
+            .next_if(|i| matches!(i, LexItem::Ending(_)))
+            .and_then(LexItem::into_ending);
+
+        Ok(Line {
+            decor: Decor { indent, ending },
+            kind,
+        })
+    }
+
+    pub fn as_comment(&self) -> Option<&str> {
+        match &self.kind {
+            LineKind::Comment(s) => Some(s),
+            _ => None,
         }
     }
 
     pub fn as_directive(&self) -> Option<&Directive> {
-        match self {
-            Line::Directive(d) => Some(d),
+        match &self.kind {
+            LineKind::Directive(d) => Some(d),
             _ => None,
         }
     }
 
     pub fn as_directive_mut(&mut self) -> Option<&mut Directive> {
-        match self {
-            Line::Directive(d) => Some(d),
-            _ => None,
-        }
-    }
-
-    pub fn into_directive(self) -> Option<Directive> {
-        match self {
-            Line::Directive(d) => Some(d),
+        match &mut self.kind {
+            LineKind::Directive(d) => Some(d),
             _ => None,
         }
     }
@@ -206,52 +264,21 @@ impl Line {
 
 impl fmt::Display for Line {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Line::Directive(d) => {
-                write!(f, "{d}")?;
-            }
-            Line::Comment {
-                indent,
-                text,
-                ending,
-            } => {
-                if let Some(indent) = indent {
-                    write!(f, "{indent}")?;
-                }
-                write!(f, "{text}")?;
-                if let Some(ending) = ending {
-                    write!(f, "{ending}")?;
-                }
-            }
-            Line::Blank { indent, ending } => {
-                if let Some(indent) = indent {
-                    write!(f, "{indent}")?;
-                }
-                if let Some(ending) = ending {
-                    write!(f, "{ending}")?;
-                }
-            }
+        if let Some(indent) = self.decor.indent() {
+            write!(f, "{indent}")?;
+        }
+
+        match &self.kind {
+            LineKind::Directive(d) => write!(f, "{d}")?,
+            LineKind::Comment(text) => write!(f, "{text}")?,
+            LineKind::Blank => {} //no-op
+        }
+
+        if let Some(ending) = self.decor.ending() {
+            write!(f, "{ending}")?;
         }
         Ok(())
     }
-}
-
-fn is_inline_ws(c: char) -> bool {
-    c.is_whitespace() && c != '\n' && c != '\r'
-}
-
-fn ending_token(ending: &str) -> Result<Token> {
-    if ending != "\n" && ending != "\r\n" {
-        return Err(Error::InvalidLineEnding(ending.into()));
-    }
-    Ok(Token::synthetic(TokenKind::LineEnding, ending.to_string()))
-}
-
-fn indent_token(indent: &str) -> Result<Token> {
-    if indent.chars().any(|c| !is_inline_ws(c)) || indent.is_empty() {
-        return Err(Error::InvalidIndent(indent.into()));
-    }
-    Ok(Token::synthetic(TokenKind::WhiteSpace, indent.to_string()))
 }
 
 pub trait LineIterExt<'a> {
@@ -281,21 +308,6 @@ impl<'a, I: Iterator<Item = &'a mut Line>> LineIterMutExt<'a> for I {
 
     fn cumulative_directives_mut(self) -> impl Iterator<Item = &'a mut Directive> {
         self.filter_map(|l| l.as_directive_mut())
-            .filter(|d| d.is_cumulative())
-    }
-}
-
-pub trait LineIntoIterExt {
-    fn into_any_directives(self) -> impl Iterator<Item = Directive>;
-    fn into_cumulative_directives(self) -> impl Iterator<Item = Directive>;
-}
-impl<I: Iterator<Item = Line>> LineIntoIterExt for I {
-    fn into_any_directives(self) -> impl Iterator<Item = Directive> {
-        self.filter_map(|l| l.into_directive())
-    }
-
-    fn into_cumulative_directives(self) -> impl Iterator<Item = Directive> {
-        self.filter_map(|l| l.into_directive())
             .filter(|d| d.is_cumulative())
     }
 }
@@ -342,23 +354,43 @@ mod tests {
         assert_eq!(roundtrip(data), data);
     }
 
-    // --- Directive tests ---
+    // --- Line tests ---
 
     fn sample_directive() -> Directive {
         Directive::new("User", "x").unwrap()
     }
 
+    fn sample_line() -> Line {
+        Line {
+            decor: Decor::default(),
+            kind: LineKind::Directive(sample_directive()),
+        }
+    }
+
     #[test]
     fn with_ending_rejects_garbage() {
-        assert!(sample_directive().with_ending("\r").is_err());
-        assert!(sample_directive().with_ending(" \n").is_err());
+        assert!(sample_line().with_ending("\r").is_err());
+        assert!(sample_line().with_ending(" \n").is_err());
+    }
+
+    #[test]
+    fn with_indent_rejects_newline() {
+        assert!(sample_line().with_indent("\n").is_err());
+    }
+
+    #[test]
+    fn with_indent_accepts_blank_chars() {
+        assert!(sample_line().with_indent("\t  ").is_ok());
     }
 
     #[test]
     fn with_sep_accepts_valid_forms() {
         assert!(sample_directive().with_sep(" ").is_ok());
         assert!(sample_directive().with_sep("=").is_ok());
-        assert_eq!(sample_directive().with_sep(" = ").unwrap().sep.data, " = ");
+        assert_eq!(
+            sample_directive().with_sep(" = ").unwrap().separator(),
+            " = "
+        );
     }
 
     #[test]
@@ -375,15 +407,5 @@ mod tests {
     #[test]
     fn with_sep_rejects_empty() {
         assert!(sample_directive().with_sep("").is_err());
-    }
-
-    #[test]
-    fn with_indent_rejects_newline() {
-        assert!(sample_directive().with_indent("\n").is_err());
-    }
-
-    #[test]
-    fn with_indent_accepts_blank_chars() {
-        assert!(sample_directive().with_indent("\t  ").is_ok());
     }
 }
