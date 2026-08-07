@@ -22,7 +22,6 @@ struct Position {
 pub(crate) struct Token {
     kind: TokenKind,
     pub(crate) data: String,
-    pos: Option<Position>,
 }
 
 impl fmt::Display for Token {
@@ -36,7 +35,6 @@ impl Token {
         Token {
             kind,
             data,
-            pos: None,
         }
     }
 }
@@ -91,7 +89,6 @@ impl<'a> Lexer<'a> {
         Token {
             kind: TokenKind::WhiteSpace,
             data: self.data[start..end].to_string(),
-            pos: Some(start_pos),
         }
     }
 
@@ -114,7 +111,6 @@ impl<'a> Lexer<'a> {
         Token {
             kind: TokenKind::Comment,
             data: self.data[start..end].to_string(),
-            pos: Some(start_pos),
         }
     }
 
@@ -129,7 +125,6 @@ impl<'a> Lexer<'a> {
                 Ok(Token {
                     kind: TokenKind::LineEnding,
                     data: self.data[offset..offset + 1].to_string(),
-                    pos: Some(start_pos),
                 })
             }
 
@@ -143,7 +138,6 @@ impl<'a> Lexer<'a> {
                         Ok(Token {
                             kind: TokenKind::LineEnding,
                             data: self.data[offset..offset + 2].to_string(),
-                            pos: Some(start_pos),
                         })
                     }
                     Some((_, _)) | None => Err(Error::Parse {
@@ -194,7 +188,6 @@ impl<'a> Lexer<'a> {
         Ok(Token {
             kind: TokenKind::FieldKey,
             data: self.data[start..end].to_string(),
-            pos: Some(start_pos),
         })
     }
 
@@ -249,7 +242,6 @@ impl<'a> Lexer<'a> {
         Ok(Token {
             kind: TokenKind::FieldSeparator,
             data: self.data[start..end].to_string(),
-            pos: Some(start_pos),
         })
     }
 
@@ -299,7 +291,6 @@ impl<'a> Lexer<'a> {
         Ok(Token {
             kind: TokenKind::FieldValue,
             data: value_data,
-            pos: Some(start_pos),
         })
     }
 
@@ -570,42 +561,6 @@ mod tests {
         let tokens = Lexer::new("  \nHost x").tokenize().unwrap();
         assert_eq!(tokens[0].data, "  ");
         assert_eq!(tokens[1].kind, TokenKind::LineEnding);
-    }
-
-    #[test]
-    fn token_positions_point_at_token_start() {
-        let tokens = Lexer::new("Host a\nUser b").tokenize().unwrap();
-
-        let positions: Vec<(usize, usize)> = tokens
-            .iter()
-            .map(|t| {
-                let p = t.pos.expect("lexed tokens carry a position");
-                (p.line, p.col)
-            })
-            .collect();
-
-        assert_eq!(
-            positions,
-            vec![
-                (1, 1), // FieldKey       "Host"  <- start of line 1
-                (1, 5), // FieldSeparator " "
-                (1, 6), // FieldValue     "a"
-                (1, 7), // LineEnding     "\n"
-                (2, 1), // FieldKey       "User"  <- start of line 2
-                (2, 5), // FieldSeparator " "
-                (2, 6), // FieldValue     "b"
-            ]
-        );
-    }
-
-    #[test]
-    fn crlf_does_not_shift_the_next_line() {
-        // the CR branch increments col before consuming '\n', so the reset is worth pinning
-        let tokens = Lexer::new("Host a\r\nUser b").tokenize().unwrap();
-        let key = &tokens[4];
-        assert_eq!(key.kind, TokenKind::FieldKey);
-        assert_eq!(key.data, "User");
-        assert_eq!(key.pos, Some(Position { line: 2, col: 1 }));
     }
 
     #[test]
