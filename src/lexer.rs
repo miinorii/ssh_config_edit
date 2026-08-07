@@ -2,7 +2,6 @@ use crate::error::{Error, ParseErrorKind, Result};
 use std::str::CharIndices;
 use std::{fmt, iter::Peekable};
 
-
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenKind {
     WhiteSpace,
@@ -33,7 +32,7 @@ impl fmt::Display for Token {
 }
 
 impl Token {
-    fn synthetic(kind: TokenKind, data: String) -> Self {
+    pub(crate) fn synthetic(kind: TokenKind, data: String) -> Self {
         Token {
             kind,
             data,
@@ -69,7 +68,10 @@ impl<'a> Lexer<'a> {
 
     /// 1 based (line, column) of the next char to be consumed
     fn position(&self) -> Position {
-        Position { line: self.line, col: self.col }
+        Position {
+            line: self.line,
+            col: self.col,
+        }
     }
 
     fn handle_whitespace(&mut self) -> Token {
@@ -605,7 +607,6 @@ mod tests {
         assert_eq!(key.data, "User");
         assert_eq!(key.pos, Some(Position { line: 2, col: 1 }));
     }
-
 
     #[test]
     fn error_points_at_the_offending_char() {
