@@ -1,5 +1,7 @@
+use crate::error::{Error, ParseErrorKind, Result};
 use std::str::CharIndices;
 use std::{fmt, iter::Peekable};
+
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenKind {
@@ -11,10 +13,17 @@ pub enum TokenKind {
     FieldValue,
 }
 
-#[derive(Clone)]
+#[derive(Debug, PartialEq, Copy, Clone)]
+struct Position {
+    line: usize,
+    col: usize,
+}
+
+#[derive(Debug, Clone)]
 pub struct Token {
     pub kind: TokenKind,
     pub data: String,
+    pos: Option<Position>,
 }
 
 impl fmt::Display for Token {
@@ -23,11 +32,21 @@ impl fmt::Display for Token {
     }
 }
 
+impl Token {
+    fn synthetic(kind: TokenKind, data: String) -> Self {
+        Token {
+            kind,
+            data,
+            pos: None,
+        }
+    }
+}
+
 pub struct Lexer<'a> {
     data: &'a str,
     iter: Peekable<CharIndices<'a>>,
     line: usize,
-    pos: usize,
+    col: usize,
 }
 
 impl<'a> Lexer<'a> {
@@ -36,7 +55,7 @@ impl<'a> Lexer<'a> {
             data,
             iter: data.char_indices().peekable(),
             line: 1,
-            pos: 0,
+            col: 1,
         }
     }
 
@@ -48,7 +67,14 @@ impl<'a> Lexer<'a> {
             .unwrap_or(self.data.len())
     }
 
+    /// 1 based (line, column) of the next char to be consumed
+    fn position(&self) -> Position {
+        Position { line: self.line, col: self.col }
+    }
+
     fn handle_whitespace(&mut self) -> Token {
+        let start_pos = self.position();
+
         let start = self.peek_next_char_offset();
         let mut end = 0;
         while let Some(&(offset, char)) = self.iter.peek() {
@@ -57,16 +83,19 @@ impl<'a> Lexer<'a> {
                 break;
             }
             self.iter.next();
-            self.pos += 1;
+            self.col += 1;
             end = offset + char.len_utf8();
         }
         Token {
             kind: TokenKind::WhiteSpace,
             data: self.data[start..end].to_string(),
+            pos: Some(start_pos),
         }
     }
 
     fn handle_comment(&mut self) -> Token {
+        let start_pos = self.position();
+
         // except the first char to be '#'
         let start = self.peek_next_char_offset();
         let mut end = 0;
@@ -76,57 +105,65 @@ impl<'a> Lexer<'a> {
                 break;
             }
             self.iter.next();
-            self.pos += 1;
+            self.col += 1;
             end = offset + char.len_utf8();
         }
 
         Token {
             kind: TokenKind::Comment,
             data: self.data[start..end].to_string(),
+            pos: Some(start_pos),
         }
     }
 
-    fn handle_newline(&mut self) -> Result<Token, String> {
+    fn handle_newline(&mut self) -> Result<Token> {
+        let start_pos = self.position();
+
         match self.iter.next() {
             // handle single LF newline
             Some((offset, '\n')) => {
                 self.line += 1;
-                self.pos = 1;
+                self.col = 1;
                 Ok(Token {
                     kind: TokenKind::LineEnding,
                     data: self.data[offset..offset + 1].to_string(),
+                    pos: Some(start_pos),
                 })
             }
 
             // handle CRLF and improper format
             Some((offset, '\r')) => {
-                self.pos += 1;
+                self.col += 1;
                 match self.iter.next() {
                     Some((_, '\n')) => {
                         self.line += 1;
-                        self.pos = 1;
+                        self.col = 1;
                         Ok(Token {
                             kind: TokenKind::LineEnding,
                             data: self.data[offset..offset + 2].to_string(),
+                            pos: Some(start_pos),
                         })
                     }
-                    Some((_, _)) | None => Err(format!(
-                        "at ln:{} pos:{}, expected '\n'",
-                        self.line,
-                        self.pos + 1,
-                    )),
+                    Some((_, _)) | None => Err(Error::Parse {
+                        line: self.line,
+                        col: self.col,
+                        kind: ParseErrorKind::UnterminatedCRLF,
+                    }),
                 }
             }
 
             // catchall for improper data format
-            Some((_, _)) | None => Err(format!(
-                "at ln:{} pos:{}, improper data format",
-                self.line, self.pos
-            )),
+            Some((_, _)) | None => Err(Error::Parse {
+                line: self.line,
+                col: self.col,
+                kind: ParseErrorKind::InvalidParserUse,
+            }),
         }
     }
 
-    fn handle_field_key(&mut self) -> Result<Token, String> {
+    fn handle_field_key(&mut self) -> Result<Token> {
+        let start_pos = self.position();
+
         let start = self.peek_next_char_offset();
         let mut end = 0;
         loop {
@@ -134,11 +171,11 @@ impl<'a> Lexer<'a> {
             match next_data {
                 // end if key boundary can't be detected (improper file format)
                 Some((_, '\r')) | Some((_, '\n')) | None => {
-                    return Err(format!(
-                        "at ln:{} pos:{}, key boundary not found",
-                        self.line,
-                        self.pos + 1
-                    ));
+                    return Err(Error::Parse {
+                        line: self.line,
+                        col: self.col,
+                        kind: ParseErrorKind::KeyBoundaryNotFound,
+                    });
                 }
                 // key boundary / separator territory
                 Some((_, c)) if c.is_whitespace() || *c == '=' => {
@@ -147,7 +184,7 @@ impl<'a> Lexer<'a> {
                 // key content
                 Some((offset, c)) => {
                     end = offset + c.len_utf8();
-                    self.pos += 1;
+                    self.col += 1;
                     self.iter.next();
                 }
             }
@@ -155,10 +192,13 @@ impl<'a> Lexer<'a> {
         Ok(Token {
             kind: TokenKind::FieldKey,
             data: self.data[start..end].to_string(),
+            pos: Some(start_pos),
         })
     }
 
-    fn handle_field_separator(&mut self) -> Result<Token, String> {
+    fn handle_field_separator(&mut self) -> Result<Token> {
+        let start_pos = self.position();
+
         let start = self.peek_next_char_offset();
         let mut end = 0;
         let mut equal_seen = false;
@@ -167,28 +207,28 @@ impl<'a> Lexer<'a> {
             match next_data {
                 // end if separator boundary can't be detected (improper file format)
                 Some((_, '\r')) | Some((_, '\n')) | None => {
-                    return Err(format!(
-                        "at ln:{} pos:{}, separator boundary not found",
-                        self.line,
-                        self.pos + 1
-                    ));
+                    return Err(Error::Parse {
+                        line: self.line,
+                        col: self.col,
+                        kind: ParseErrorKind::SeparatorBoundaryNotFound,
+                    });
                 }
 
                 // first time we see '='
                 Some((offset, c @ '=')) if !equal_seen => {
                     equal_seen = true;
                     end = offset + c.len_utf8();
-                    self.pos += 1;
+                    self.col += 1;
                     self.iter.next();
                 }
 
                 // error if we see '=' another time
                 Some((_, '=')) => {
-                    return Err(format!(
-                        "at ln:{} pos:{}, separator contain two '='",
-                        self.line,
-                        self.pos + 1
-                    ));
+                    return Err(Error::Parse {
+                        line: self.line,
+                        col: self.col,
+                        kind: ParseErrorKind::SeparatorHasMoreThanOneEqual,
+                    });
                 }
 
                 // separator boundary
@@ -199,7 +239,7 @@ impl<'a> Lexer<'a> {
                 // separator content
                 Some((offset, c)) => {
                     end = offset + c.len_utf8();
-                    self.pos += 1;
+                    self.col += 1;
                     self.iter.next();
                 }
             }
@@ -207,10 +247,13 @@ impl<'a> Lexer<'a> {
         Ok(Token {
             kind: TokenKind::FieldSeparator,
             data: self.data[start..end].to_string(),
+            pos: Some(start_pos),
         })
     }
 
-    fn handle_field_value(&mut self) -> Result<Token, String> {
+    fn handle_field_value(&mut self) -> Result<Token> {
+        let start_pos = self.position();
+
         let start = self.peek_next_char_offset();
         let mut end = 0;
         let mut has_consumed = false;
@@ -219,11 +262,11 @@ impl<'a> Lexer<'a> {
             match next_data {
                 // end if value boundary can't be detected (improper file format)
                 Some((_, '\r')) | Some((_, '\n')) | None if !has_consumed => {
-                    return Err(format!(
-                        "at ln:{} pos:{}, value not provided",
-                        self.line,
-                        self.pos + 1
-                    ));
+                    return Err(Error::Parse {
+                        line: self.line,
+                        col: self.col,
+                        kind: ParseErrorKind::ValueNotFound,
+                    });
                 }
 
                 // value boundary
@@ -235,7 +278,7 @@ impl<'a> Lexer<'a> {
                 Some((offset, c)) => {
                     has_consumed = true;
                     end = *offset + c.len_utf8();
-                    self.pos += 1;
+                    self.col += 1;
                     self.iter.next();
                 }
             }
@@ -245,19 +288,21 @@ impl<'a> Lexer<'a> {
 
         // naively detect unclosed double quotes by checking if there is an odd count
         if value_data.chars().filter(|c| *c == '"').count() % 2 != 0 {
-            return Err(format!(
-                "at ln:{} pos:{}, unclosed double quote",
-                self.line, self.pos
-            ));
+            return Err(Error::Parse {
+                line: start_pos.line,
+                col: start_pos.col,
+                kind: ParseErrorKind::UnclosedDoubleQuote,
+            });
         }
         Ok(Token {
             kind: TokenKind::FieldValue,
             data: value_data,
+            pos: Some(start_pos),
         })
     }
 
     /// <https://man7.org/linux/man-pages/man5/ssh_config.5.html>
-    pub fn tokenize(mut self) -> Result<Vec<Token>, String> {
+    pub fn tokenize(mut self) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
         while let Some(&(_, c)) = self.iter.peek() {
             match c {
@@ -523,5 +568,56 @@ mod tests {
         let tokens = Lexer::new("  \nHost x").tokenize().unwrap();
         assert_eq!(tokens[0].data, "  ");
         assert_eq!(tokens[1].kind, TokenKind::LineEnding);
+    }
+
+    #[test]
+    fn token_positions_point_at_token_start() {
+        let tokens = Lexer::new("Host a\nUser b").tokenize().unwrap();
+
+        let positions: Vec<(usize, usize)> = tokens
+            .iter()
+            .map(|t| {
+                let p = t.pos.expect("lexed tokens carry a position");
+                (p.line, p.col)
+            })
+            .collect();
+
+        assert_eq!(
+            positions,
+            vec![
+                (1, 1), // FieldKey       "Host"  <- start of line 1
+                (1, 5), // FieldSeparator " "
+                (1, 6), // FieldValue     "a"
+                (1, 7), // LineEnding     "\n"
+                (2, 1), // FieldKey       "User"  <- start of line 2
+                (2, 5), // FieldSeparator " "
+                (2, 6), // FieldValue     "b"
+            ]
+        );
+    }
+
+    #[test]
+    fn crlf_does_not_shift_the_next_line() {
+        // the CR branch increments col before consuming '\n', so the reset is worth pinning
+        let tokens = Lexer::new("Host a\r\nUser b").tokenize().unwrap();
+        let key = &tokens[4];
+        assert_eq!(key.kind, TokenKind::FieldKey);
+        assert_eq!(key.data, "User");
+        assert_eq!(key.pos, Some(Position { line: 2, col: 1 }));
+    }
+
+
+    #[test]
+    fn error_points_at_the_offending_char() {
+        // second '=' is the 6th char of line 2
+        let err = Lexer::new("Host a\nPort==22\n").tokenize().unwrap_err();
+        assert_eq!(
+            err,
+            Error::Parse {
+                line: 2,
+                col: 6,
+                kind: ParseErrorKind::SeparatorHasMoreThanOneEqual,
+            }
+        );
     }
 }
