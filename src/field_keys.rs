@@ -1,7 +1,7 @@
 //! Typed representation of ssh_config(5) keywords.
 //!
 //! Keyword list derived from the OpenSSH 9.9p2 ssh_config(5) manual page:
-//! https://man7.org/linux/man-pages/man5/ssh_config.5.html
+//! <https://man7.org/linux/man-pages/man5/ssh_config.5.html>
 //!
 //! Per ssh_config(5), known keywords are case-insensitive.
 //!

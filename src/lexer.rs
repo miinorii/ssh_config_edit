@@ -256,7 +256,7 @@ impl<'a> Lexer<'a> {
         })
     }
 
-    /// https://man7.org/linux/man-pages/man5/ssh_config.5.html
+    /// <https://man7.org/linux/man-pages/man5/ssh_config.5.html>
     pub fn tokenize(mut self) -> Result<Vec<Token>, String> {
         let mut tokens = Vec::new();
         while let Some(&(_, c)) = self.iter.peek() {
