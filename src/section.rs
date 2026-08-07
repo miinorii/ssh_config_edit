@@ -1,3 +1,4 @@
+use crate::error::Result;
 use crate::field_keys::FieldKey;
 use crate::lexer::Token;
 use crate::line::{Directive, Line};
@@ -96,7 +97,7 @@ impl Section {
     }
 
     /// Append `line` and add a line terminator to the previous header/line if none is set.
-    pub fn push_line(&mut self, mut line: Line) -> Result<(), String> {
+    pub fn push_line(&mut self, mut line: Line) -> Result<()> {
         let line_ending = self.infer_line_ending();
         let line_indent = self.infer_line_indent();
 
@@ -116,7 +117,7 @@ impl Section {
         Ok(())
     }
 
-    pub fn terminate(&mut self, ending: &str) -> Result<(), String> {
+    pub fn terminate(&mut self, ending: &str) -> Result<()> {
         if self.header.ending.is_none() {
             self.header.set_ending(ending)?;
         }

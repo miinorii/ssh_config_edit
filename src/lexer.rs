@@ -267,7 +267,7 @@ impl<'a> Lexer<'a> {
                     return Err(Error::Parse {
                         line: self.line,
                         col: self.col,
-                        kind: ParseErrorKind::ValueNotFound,
+                        kind: ParseErrorKind::ExpectedFieldValue,
                     });
                 }
 

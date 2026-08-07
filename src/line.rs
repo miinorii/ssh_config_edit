@@ -1,3 +1,4 @@
+use crate::error::{Error, Result};
 use crate::field_keys::FieldKey;
 use crate::lexer::{Token, TokenKind};
 use std::{fmt, iter::Peekable, vec};
@@ -11,60 +12,51 @@ pub struct Directive {
 }
 
 impl Directive {
-    pub fn new(key: &str, value: &str) -> Result<Self, String> {
+    pub fn new(key: &str, value: &str) -> Result<Self> {
         if key.is_empty() {
-            return Err("key is empty".into());
+            return Err(Error::EmptyKey);
         }
 
         if value.is_empty() {
-            return Err("value is empty".into());
+            return Err(Error::EmptyValue);
         }
 
         Ok(Self {
             indent: None,
-            key: Token {
-                kind: TokenKind::FieldKey,
-                data: key.into(),
-            },
-            sep: Token {
-                kind: TokenKind::FieldSeparator,
-                data: " ".into(),
-            },
-            value: Token {
-                kind: TokenKind::FieldValue,
-                data: value.into(),
-            },
+            key: Token::synthetic(TokenKind::FieldKey, key.into()),
+            sep: Token::synthetic(TokenKind::FieldSeparator, " ".into()),
+            value: Token::synthetic(TokenKind::FieldValue, value.into()),
             ending: None,
         })
     }
 
-    pub fn with_indent(mut self, indent: &str) -> Result<Self, String> {
+    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
         self.set_indent(indent)?;
         Ok(self)
     }
 
-    pub fn with_sep(mut self, sep: &str) -> Result<Self, String> {
+    pub fn with_sep(mut self, sep: &str) -> Result<Self> {
         if sep.chars().any(|c| !is_inline_ws(c) && c != '=')
             || sep.chars().filter(|c| *c == '=').count() > 1
             || sep.is_empty()
         {
-            return Err("unexpected separator content: separator should be composed of whitespaces and at most one '='".into());
+            return Err(Error::InvalidSeparator(sep.into()));
         }
         self.sep.data = sep.into();
         Ok(self)
     }
 
-    pub fn with_ending(mut self, ending: &str) -> Result<Self, String> {
+    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
         self.set_ending(ending)?;
         Ok(self)
     }
 
-    pub fn set_ending(&mut self, ending: &str) -> Result<(), String> {
+    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
         self.ending = Some(ending_token(ending)?);
         Ok(())
     }
 
-    pub fn set_indent(&mut self, indent: &str) -> Result<(), String> {
+    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
         self.indent = Some(indent_token(indent)?);
         Ok(())
     }
@@ -102,7 +94,7 @@ pub enum Line {
 
 impl Line {
     /// Parse multiple `Line` from a `Vec<Token>`.
-    pub fn parse_lines(tokens: Vec<Token>) -> Result<Vec<Self>, String> {
+    pub fn parse_lines(tokens: Vec<Token>) -> Result<Vec<Self>> {
         let mut iter = tokens.into_iter().peekable();
         let mut lines: Vec<Self> = Vec::new();
         while iter.peek().is_some() {
@@ -125,7 +117,7 @@ impl Line {
         }
     }
 
-    pub fn set_ending(&mut self, ending: &str) -> Result<(), String> {
+    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
         match self {
             Line::Directive(d) => d.set_ending(ending)?,
             Line::Comment { ending: e, .. } | Line::Blank { ending: e, .. } => {
@@ -136,7 +128,7 @@ impl Line {
         Ok(())
     }
 
-    pub fn set_indent(&mut self, indent: &str) -> Result<(), String> {
+    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
         match self {
             Line::Directive(d) => d.set_indent(indent)?,
             Line::Comment { indent: e, .. } | Line::Blank { indent: e, .. } => {
@@ -157,7 +149,7 @@ impl Line {
     /// - `line_ending`
     ///
     /// Optionnal token are denoted with `[]`
-    fn parse_line(iter: &mut Peekable<vec::IntoIter<Token>>) -> Result<Line, String> {
+    fn parse_line(iter: &mut Peekable<vec::IntoIter<Token>>) -> Result<Line> {
         let indent = iter.next_if(|t| t.kind == TokenKind::WhiteSpace);
         match iter.peek().map(|t| &t.kind) {
             Some(TokenKind::Comment) => Ok(Line::Comment {
@@ -170,13 +162,13 @@ impl Line {
                 ending: iter.next(), // None if EOF
             }),
             Some(TokenKind::FieldKey) => {
-                let key = iter.next().unwrap();
+                let key = iter.next().expect("peeked a FIeldKey");
                 let sep = iter
                     .next_if(|t| t.kind == TokenKind::FieldSeparator)
-                    .ok_or("expected FieldSeparator")?;
+                    .expect("tokenize emits FieldSeparator immediately after FieldKey");
                 let value = iter
                     .next_if(|t| t.kind == TokenKind::FieldValue)
-                    .ok_or("expected FieldValue")?;
+                    .expect("tokenize emits FieldValue immediately after FieldSeparator");
                 let ending = iter.next_if(|t| t.kind == TokenKind::LineEnding);
                 Ok(Line::Directive(Directive {
                     indent,
@@ -186,7 +178,7 @@ impl Line {
                     ending,
                 }))
             }
-            Some(other) => Err(format!("unexpected token: {other:?}")),
+            Some(other) => unreachable!(),
         }
     }
 
@@ -248,26 +240,18 @@ fn is_inline_ws(c: char) -> bool {
     c.is_whitespace() && c != '\n' && c != '\r'
 }
 
-fn ending_token(ending: &str) -> Result<Token, String> {
+fn ending_token(ending: &str) -> Result<Token> {
     if ending != "\n" && ending != "\r\n" {
-        return Err("unexpected ending content: ending should be '\\n' or '\\r\\n'".into());
+        return Err(Error::InvalidLineEnding(ending.into()));
     }
-    Ok(Token {
-        kind: TokenKind::LineEnding,
-        data: ending.to_string(),
-    })
+    Ok(Token::synthetic(TokenKind::LineEnding, ending.to_string()))
 }
 
-fn indent_token(indent: &str) -> Result<Token, String> {
+fn indent_token(indent: &str) -> Result<Token> {
     if indent.chars().any(|c| !is_inline_ws(c)) || indent.is_empty() {
-        return Err(
-            "unexpected indent content: indent should be composed of whitespace only".into(),
-        );
+        return Err(Error::InvalidIndent(indent.into()));
     }
-    Ok(Token {
-        kind: TokenKind::WhiteSpace,
-        data: indent.to_string(),
-    })
+    Ok(Token::synthetic(TokenKind::WhiteSpace, indent.to_string()))
 }
 
 pub trait LineIterExt<'a> {

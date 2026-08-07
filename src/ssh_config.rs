@@ -1,3 +1,4 @@
+use crate::error::Result;
 use crate::field_keys::FieldKey;
 use crate::lexer::Lexer;
 use crate::line::{Directive, Line, LineIterExt, LineIterMutExt};
@@ -12,7 +13,7 @@ pub struct SSHConfig {
 }
 
 impl SSHConfig {
-    pub fn new(data: &str) -> Result<SSHConfig, String> {
+    pub fn new(data: &str) -> Result<SSHConfig> {
         let lexer = Lexer::new(data);
         let lines = Line::parse_lines(lexer.tokenize()?)?;
         let (preamble, sections) = Section::parse_sections(lines);
@@ -30,7 +31,7 @@ impl SSHConfig {
             .map_or_else(|| DEFAULT_LINE_ENDING.to_string(), |t| t.data.clone())
     }
 
-    pub fn set_host_settings(&mut self, host_settings: &HostSettings) -> Result<(), String> {
+    pub fn set_host_settings(&mut self, host_settings: &HostSettings) -> Result<()> {
         let inferred_line_ending = self.infer_line_ending();
         let target_section = self
             .sections
@@ -52,7 +53,7 @@ impl SSHConfig {
                 }
 
                 // Preserve cumulative keys until a divergence is observed (a new/different value).
-                // When a divergence is observed start appending the fields 
+                // When a divergence is observed start appending the fields
                 // at the end of the current section.
                 let mut to_remove: Vec<usize> = Vec::new();
                 let mut seen: HashSet<&FieldKey> = HashSet::new();
@@ -159,12 +160,9 @@ impl SSHConfig {
         Ok(())
     }
 
-    fn insert_section(&mut self, index: usize, section: Section) -> Result<(), String> {
-        // Boundary check
-        if index > self.sections.len() {
-            return Err("supplied index > sections count".into());
-        }
-
+    /// # Panics
+    /// Panics if `index > self.sections.len()`
+    fn insert_section(&mut self, index: usize, section: Section) -> Result<()> {
         // Ensure previous last line has a line ending
         if index == self.sections.len() {
             let ending = self.infer_line_ending();
@@ -532,13 +530,19 @@ Host my.server.local
 
     #[test]
     fn cumulative_valid_preserved_divergence_appended() {
-        let mut config = SSHConfig::new(
-            "Host a\n\tIdentityFile ~/.ssh/key1\n\tIdentityFile ~/.ssh/key2\n",
-        ).unwrap();
+        let mut config =
+            SSHConfig::new("Host a\n\tIdentityFile ~/.ssh/key1\n\tIdentityFile ~/.ssh/key2\n")
+                .unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field { key: FieldKey::IdentityFile, value: "~/.ssh/key1".into() });
-        settings.add_field(Field { key: FieldKey::IdentityFile, value: "~/.ssh/keyX".into() });
+        settings.add_field(Field {
+            key: FieldKey::IdentityFile,
+            value: "~/.ssh/key1".into(),
+        });
+        settings.add_field(Field {
+            key: FieldKey::IdentityFile,
+            value: "~/.ssh/keyX".into(),
+        });
         config.set_host_settings(&settings).unwrap();
 
         // key1 line kept in place
@@ -552,17 +556,20 @@ Host my.server.local
 
     #[test]
     fn cumulative_divergence_preserves_desired_order() {
-        let mut config = SSHConfig::new(
-            "Host a\n\tIdentityFile A\n\tIdentityFile B\n\tIdentityFile C\n",
-        ).unwrap();
+        let mut config =
+            SSHConfig::new("Host a\n\tIdentityFile A\n\tIdentityFile B\n\tIdentityFile C\n")
+                .unwrap();
 
         let mut settings = HostSettings::new("a");
         for v in ["A", "X", "C"] {
-            settings.add_field(Field { key: FieldKey::IdentityFile, value: v.into() });
+            settings.add_field(Field {
+                key: FieldKey::IdentityFile,
+                value: v.into(),
+            });
         }
         config.set_host_settings(&settings).unwrap();
 
-        // valid_count=1 
+        // valid_count=1
         // A kept
         // B and C dropped
         // X and C appended in order
@@ -577,7 +584,10 @@ Host my.server.local
         let mut config = SSHConfig::new("Host a\n\tIdentityFile A\n\tIdentityFile B\n").unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field { key: FieldKey::IdentityFile, value: "A".into() });
+        settings.add_field(Field {
+            key: FieldKey::IdentityFile,
+            value: "A".into(),
+        });
         config.set_host_settings(&settings).unwrap();
 
         assert_eq!(config.to_string(), "Host a\n\tIdentityFile A\n");
@@ -588,11 +598,20 @@ Host my.server.local
         let mut config = SSHConfig::new("Host a\n\tIdentityFile A\n").unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field { key: FieldKey::IdentityFile, value: "A".into() });
-        settings.add_field(Field { key: FieldKey::IdentityFile, value: "B".into() });
+        settings.add_field(Field {
+            key: FieldKey::IdentityFile,
+            value: "A".into(),
+        });
+        settings.add_field(Field {
+            key: FieldKey::IdentityFile,
+            value: "B".into(),
+        });
         config.set_host_settings(&settings).unwrap();
 
-        assert_eq!(config.to_string(), "Host a\n\tIdentityFile A\n\tIdentityFile B\n");
+        assert_eq!(
+            config.to_string(),
+            "Host a\n\tIdentityFile A\n\tIdentityFile B\n"
+        );
     }
 
     #[test]
@@ -601,8 +620,14 @@ Host my.server.local
         let mut config = SSHConfig::new(data).unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field { key: FieldKey::IdentityFile, value: "A".into() });
-        settings.add_field(Field { key: FieldKey::IdentityFile, value: "B".into() });
+        settings.add_field(Field {
+            key: FieldKey::IdentityFile,
+            value: "A".into(),
+        });
+        settings.add_field(Field {
+            key: FieldKey::IdentityFile,
+            value: "B".into(),
+        });
         config.set_host_settings(&settings).unwrap();
 
         assert_eq!(config.to_string(), data);
@@ -610,12 +635,14 @@ Host my.server.local
 
     #[test]
     fn cumulative_key_absent_from_desired_is_removed() {
-        let mut config = SSHConfig::new(
-            "Host a\n\tIdentityFile A\n\tIdentityFile B\n\tUser bob\n",
-        ).unwrap();
+        let mut config =
+            SSHConfig::new("Host a\n\tIdentityFile A\n\tIdentityFile B\n\tUser bob\n").unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field { key: FieldKey::User, value: "bob".into() });
+        settings.add_field(Field {
+            key: FieldKey::User,
+            value: "bob".into(),
+        });
         config.set_host_settings(&settings).unwrap();
 
         assert_eq!(config.to_string(), "Host a\n\tUser bob\n");
@@ -625,14 +652,27 @@ Host my.server.local
     fn cumulative_interleaved_keys_both_diverge() {
         let mut config = SSHConfig::new(
             "Host a\n\tSetEnv A=1\n\tIdentityFile k1\n\tSetEnv B=2\n\tIdentityFile k2\n",
-        ).unwrap();
+        )
+        .unwrap();
 
         // IdentityFile added first -> processed first -> to_remove pushed as [3, 2] (non-ascending)
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field { key: FieldKey::IdentityFile, value: "k1".into() });
-        settings.add_field(Field { key: FieldKey::IdentityFile, value: "kX".into() });
-        settings.add_field(Field { key: FieldKey::SetEnv, value: "A=1".into() });
-        settings.add_field(Field { key: FieldKey::SetEnv, value: "B=9".into() });
+        settings.add_field(Field {
+            key: FieldKey::IdentityFile,
+            value: "k1".into(),
+        });
+        settings.add_field(Field {
+            key: FieldKey::IdentityFile,
+            value: "kX".into(),
+        });
+        settings.add_field(Field {
+            key: FieldKey::SetEnv,
+            value: "A=1".into(),
+        });
+        settings.add_field(Field {
+            key: FieldKey::SetEnv,
+            value: "B=9".into(),
+        });
         config.set_host_settings(&settings).unwrap();
 
         assert_eq!(
@@ -640,5 +680,4 @@ Host my.server.local
             "Host a\n\tSetEnv A=1\n\tIdentityFile k1\n\tIdentityFile kX\n\tSetEnv B=9\n"
         );
     }
-
 }
