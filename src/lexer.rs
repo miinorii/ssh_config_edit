@@ -2,44 +2,53 @@ use crate::error::{Error, ParseErrorKind, Result};
 use std::str::CharIndices;
 use std::{fmt, iter::Peekable};
 
-#[derive(PartialEq, Debug, Clone)]
-pub(crate) enum TokenKind {
-    WhiteSpace,
-    LineEnding,
-    Comment,
-    FieldKey,
-    FieldSeparator,
-    FieldValue,
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum LexItem {
+    Indent(String),
+    Ending(String),
+    Comment(String),
+    Directive {
+        key: String,
+        sep: String,
+        value: String,
+    },
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
-struct Position {
-    line: usize,
-    col: usize,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct Token {
-    kind: TokenKind,
-    pub(crate) data: String,
-}
-
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.data)
+impl LexItem {
+    pub(crate) fn into_indent(self) -> Option<String> {
+        match self {
+            LexItem::Indent(s) => Some(s),
+            _ => None,
+        }
     }
-}
 
-impl Token {
-    pub(crate) fn synthetic(kind: TokenKind, data: String) -> Self {
-        Token {
-            kind,
-            data,
+    pub(crate) fn into_ending(self) -> Option<String> {
+        match self {
+            LexItem::Ending(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn into_comment(self) -> Option<String> {
+        match self {
+            LexItem::Comment(s) => Some(s),
+            _ => None,
         }
     }
 }
 
-struct Lexer<'a> {
+impl fmt::Display for LexItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LexItem::Indent(s) => write!(f, "{s}"),
+            LexItem::Ending(s) => write!(f, "{s}"),
+            LexItem::Comment(s) => write!(f, "{s}"),
+            LexItem::Directive { key, sep, value } => write!(f, "{key}{sep}{value}"),
+        }
+    }
+}
+
+pub(crate) struct Lexer<'a> {
     data: &'a str,
     iter: Peekable<CharIndices<'a>>,
     line: usize,
@@ -47,7 +56,7 @@ struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    fn new(data: &'a str) -> Self {
+    pub(crate) fn new(data: &'a str) -> Self {
         Self {
             data,
             iter: data.char_indices().peekable(),
@@ -64,17 +73,7 @@ impl<'a> Lexer<'a> {
             .unwrap_or(self.data.len())
     }
 
-    /// 1 based (line, column) of the next char to be consumed
-    fn position(&self) -> Position {
-        Position {
-            line: self.line,
-            col: self.col,
-        }
-    }
-
-    fn handle_whitespace(&mut self) -> Token {
-        let start_pos = self.position();
-
+    fn handle_indent(&mut self) -> LexItem {
         let start = self.peek_next_char_offset();
         let mut end = 0;
         while let Some(&(offset, char)) = self.iter.peek() {
@@ -86,15 +85,10 @@ impl<'a> Lexer<'a> {
             self.col += 1;
             end = offset + char.len_utf8();
         }
-        Token {
-            kind: TokenKind::WhiteSpace,
-            data: self.data[start..end].to_string(),
-        }
+        LexItem::Indent(self.data[start..end].to_string())
     }
 
-    fn handle_comment(&mut self) -> Token {
-        let start_pos = self.position();
-
+    fn handle_comment(&mut self) -> LexItem {
         // except the first char to be '#'
         let start = self.peek_next_char_offset();
         let mut end = 0;
@@ -108,24 +102,16 @@ impl<'a> Lexer<'a> {
             end = offset + char.len_utf8();
         }
 
-        Token {
-            kind: TokenKind::Comment,
-            data: self.data[start..end].to_string(),
-        }
+        LexItem::Comment(self.data[start..end].to_string())
     }
 
-    fn handle_newline(&mut self) -> Result<Token> {
-        let start_pos = self.position();
-
+    fn handle_ending(&mut self) -> Result<LexItem> {
         match self.iter.next() {
             // handle single LF newline
             Some((offset, '\n')) => {
                 self.line += 1;
                 self.col = 1;
-                Ok(Token {
-                    kind: TokenKind::LineEnding,
-                    data: self.data[offset..offset + 1].to_string(),
-                })
+                Ok(LexItem::Ending(self.data[offset..offset + 1].to_string()))
             }
 
             // handle CRLF and improper format
@@ -135,10 +121,7 @@ impl<'a> Lexer<'a> {
                     Some((_, '\n')) => {
                         self.line += 1;
                         self.col = 1;
-                        Ok(Token {
-                            kind: TokenKind::LineEnding,
-                            data: self.data[offset..offset + 2].to_string(),
-                        })
+                        Ok(LexItem::Ending(self.data[offset..offset + 2].to_string()))
                     }
                     Some((_, _)) | None => Err(Error::Parse {
                         line: self.line,
@@ -157,9 +140,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn handle_field_key(&mut self) -> Result<Token> {
-        let start_pos = self.position();
-
+    fn handle_field_key(&mut self) -> Result<&str> {
         let start = self.peek_next_char_offset();
         let mut end = 0;
         loop {
@@ -185,15 +166,10 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
-        Ok(Token {
-            kind: TokenKind::FieldKey,
-            data: self.data[start..end].to_string(),
-        })
+        Ok(&self.data[start..end])
     }
 
-    fn handle_field_separator(&mut self) -> Result<Token> {
-        let start_pos = self.position();
-
+    fn handle_field_separator(&mut self) -> Result<&str> {
         let start = self.peek_next_char_offset();
         let mut end = 0;
         let mut equal_seen = false;
@@ -239,15 +215,12 @@ impl<'a> Lexer<'a> {
                 }
             }
         }
-        Ok(Token {
-            kind: TokenKind::FieldSeparator,
-            data: self.data[start..end].to_string(),
-        })
+        Ok(&self.data[start..end])
     }
 
-    fn handle_field_value(&mut self) -> Result<Token> {
-        let start_pos = self.position();
-
+    fn handle_field_value(&mut self) -> Result<&str> {
+        let start_line = self.line;
+        let start_col = self.col;
         let start = self.peek_next_char_offset();
         let mut end = 0;
         let mut has_consumed = false;
@@ -278,24 +251,29 @@ impl<'a> Lexer<'a> {
             }
         }
 
-        let value_data = self.data[start..end].to_string();
+        let value_data = &self.data[start..end];
 
         // naively detect unclosed double quotes by checking if there is an odd count
         if value_data.chars().filter(|c| *c == '"').count() % 2 != 0 {
             return Err(Error::Parse {
-                line: start_pos.line,
-                col: start_pos.col,
+                line: start_line,
+                col: start_col,
                 kind: ParseErrorKind::UnclosedDoubleQuote,
             });
         }
-        Ok(Token {
-            kind: TokenKind::FieldValue,
-            data: value_data,
+        Ok(value_data)
+    }
+
+    fn handle_directive(&mut self) -> Result<LexItem> {
+        Ok(LexItem::Directive {
+            key: self.handle_field_key()?.to_string(),
+            sep: self.handle_field_separator()?.to_string(),
+            value: self.handle_field_value()?.to_string(),
         })
     }
 
     /// <https://man7.org/linux/man-pages/man5/ssh_config.5.html>
-    fn tokenize(mut self) -> Result<Vec<Token>> {
+    pub(crate) fn tokenize(mut self) -> Result<Vec<LexItem>> {
         let mut tokens = Vec::new();
         while let Some(&(_, c)) = self.iter.peek() {
             match c {
@@ -303,16 +281,14 @@ impl<'a> Lexer<'a> {
                 '#' => tokens.push(self.handle_comment()),
 
                 // Newlines
-                '\n' | '\r' => tokens.push(self.handle_newline()?),
+                '\n' | '\r' => tokens.push(self.handle_ending()?),
 
-                // Whitespaces
-                c if c.is_whitespace() => tokens.push(self.handle_whitespace()),
+                // Indent
+                c if c.is_whitespace() => tokens.push(self.handle_indent()),
 
-                // Other: key + separator + value
+                // Directive
                 _ => {
-                    tokens.push(self.handle_field_key()?);
-                    tokens.push(self.handle_field_separator()?);
-                    tokens.push(self.handle_field_value()?);
+                    tokens.push(self.handle_directive()?);
                 }
             }
         }
@@ -324,243 +300,115 @@ impl<'a> Lexer<'a> {
 mod tests {
     use super::*;
 
+    fn lex(data: &str) -> Vec<LexItem> {
+        Lexer::new(data).tokenize().unwrap()
+    }
+
+    // --- single items ---
+
     #[test]
     fn parse_single_comment() {
         let data = "# this is a comment";
-        let lexer = Lexer::new(data);
-        let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 1);
-        assert_eq!(tokens[0].kind, TokenKind::Comment);
-        assert_eq!(tokens[0].data, data);
+        assert_eq!(lex(data), vec![LexItem::Comment(data.into())]);
     }
 
     #[test]
-    fn parse_whitespace() {
+    fn parse_indent() {
         let data = "      ";
-        let lexer = Lexer::new(data);
-        let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 1);
-        assert_eq!(tokens[0].kind, TokenKind::WhiteSpace);
-        assert_eq!(tokens[0].data, data);
+        assert_eq!(lex(data), vec![LexItem::Indent(data.into())]);
     }
 
     #[test]
     fn parse_line_ending_lf() {
-        let data = "\n";
-        let lexer = Lexer::new(data);
-        let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 1);
-        assert_eq!(tokens[0].kind, TokenKind::LineEnding);
-        assert_eq!(tokens[0].data, data);
+        assert_eq!(lex("\n"), vec![LexItem::Ending("\n".into())]);
     }
 
     #[test]
     fn parse_line_ending_crlf() {
-        let data = "\r\n";
-        let lexer = Lexer::new(data);
-        let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 1);
-        assert_eq!(tokens[0].kind, TokenKind::LineEnding);
-        assert_eq!(tokens[0].data, data);
+        assert_eq!(lex("\r\n"), vec![LexItem::Ending("\r\n".into())]);
     }
 
     #[test]
     fn parse_line_ending_crlflf() {
-        let data = "\r\n\n";
-        let lexer = Lexer::new(data);
-        let tokens = lexer.tokenize().unwrap();
-        assert_eq!(tokens.len(), 2);
-        assert_eq!(tokens[0].kind, TokenKind::LineEnding);
-        assert_eq!(tokens[0].data, "\r\n");
-        assert_eq!(tokens[1].kind, TokenKind::LineEnding);
-        assert_eq!(tokens[1].data, "\n");
+        assert_eq!(
+            lex("\r\n\n"),
+            vec![LexItem::Ending("\r\n".into()), LexItem::Ending("\n".into()),]
+        );
     }
+
+    #[test]
+    fn indent_stops_at_newline() {
+        assert_eq!(
+            lex("  \nHost x"),
+            vec![
+                LexItem::Indent("  ".into()),
+                LexItem::Ending("\n".into()),
+                LexItem::Directive {
+                    key: "Host".into(),
+                    sep: " ".into(),
+                    value: "x".into(),
+                },
+            ]
+        );
+    }
+
+    // --- directives ---
+
+    #[test]
+    fn directive_is_one_item() {
+        assert_eq!(
+            lex("Host my.host"),
+            vec![LexItem::Directive {
+                key: "Host".into(),
+                sep: " ".into(),
+                value: "my.host".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn directive_accepts_every_separator_form() {
+        for sep in [" ", "   ", "=", "  =", "=  ", "  =  ", " = "] {
+            let data = format!("Host{sep}my.host");
+            assert_eq!(
+                lex(&data),
+                vec![LexItem::Directive {
+                    key: "Host".into(),
+                    sep: sep.into(),
+                    value: "my.host".into(),
+                }],
+                "separator {sep:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn directive_keeps_quoted_value() {
+        assert_eq!(
+            lex("Host=\"my.host\""),
+            vec![LexItem::Directive {
+                key: "Host".into(),
+                sep: "=".into(),
+                value: "\"my.host\"".into(),
+            }]
+        );
+    }
+
+    // --- errors ---
 
     #[test]
     fn err_on_line_ending_cr() {
-        let data = "\r";
-        let lexer = Lexer::new(data);
-        let err = lexer.tokenize();
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn parse_key() {
-        let key = "Host";
-        let sep = " ";
-        let value = "my.host";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::FieldKey);
-        assert_eq!(tokens[0].data, key);
-    }
-
-    #[test]
-    fn parse_key_single_whitespace_value() {
-        let key = "Host";
-        let sep = " ";
-        let value = "my.host";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::FieldKey);
-        assert_eq!(tokens[0].data, key);
-        assert_eq!(tokens[1].kind, TokenKind::FieldSeparator);
-        assert_eq!(tokens[1].data, sep);
-        assert_eq!(tokens[2].kind, TokenKind::FieldValue);
-        assert_eq!(tokens[2].data, value);
-    }
-
-    #[test]
-    fn parse_key_multiple_whitespace_value() {
-        let key = "Host";
-        let sep = "   ";
-        let value = "my.host";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::FieldKey);
-        assert_eq!(tokens[0].data, key);
-        assert_eq!(tokens[1].kind, TokenKind::FieldSeparator);
-        assert_eq!(tokens[1].data, sep);
-        assert_eq!(tokens[2].kind, TokenKind::FieldValue);
-        assert_eq!(tokens[2].data, value);
-    }
-
-    #[test]
-    fn parse_key_equal_value() {
-        let key = "Host";
-        let sep = "=";
-        let value = "my.host";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::FieldKey);
-        assert_eq!(tokens[0].data, key);
-        assert_eq!(tokens[1].kind, TokenKind::FieldSeparator);
-        assert_eq!(tokens[1].data, sep);
-        assert_eq!(tokens[2].kind, TokenKind::FieldValue);
-        assert_eq!(tokens[2].data, value);
-    }
-
-    #[test]
-    fn parse_key_sep_quoted_value() {
-        let key = "Host";
-        let sep = "=";
-        let value = "\"my.host\"";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::FieldKey);
-        assert_eq!(tokens[0].data, key);
-        assert_eq!(tokens[1].kind, TokenKind::FieldSeparator);
-        assert_eq!(tokens[1].data, sep);
-        assert_eq!(tokens[2].kind, TokenKind::FieldValue);
-        assert_eq!(tokens[2].data, value);
+        assert!(Lexer::new("\r").tokenize().is_err());
     }
 
     #[test]
     fn err_on_unclosed_double_quote() {
-        let key = "Host";
-        let sep = "=";
-        let value = "\"test";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let err = lexer.tokenize();
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn parse_key_equal_whitespace_value() {
-        let key = "Host";
-        let sep = "=  ";
-        let value = "my.host";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::FieldKey);
-        assert_eq!(tokens[0].data, key);
-        assert_eq!(tokens[1].kind, TokenKind::FieldSeparator);
-        assert_eq!(tokens[1].data, sep);
-        assert_eq!(tokens[2].kind, TokenKind::FieldValue);
-        assert_eq!(tokens[2].data, value);
-    }
-
-    #[test]
-    fn parse_key_whitespace_equal_value() {
-        let key = "Host";
-        let sep = "  =";
-        let value = "my.host";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::FieldKey);
-        assert_eq!(tokens[0].data, key);
-        assert_eq!(tokens[1].kind, TokenKind::FieldSeparator);
-        assert_eq!(tokens[1].data, sep);
-        assert_eq!(tokens[2].kind, TokenKind::FieldValue);
-        assert_eq!(tokens[2].data, value);
-    }
-
-    #[test]
-    fn parse_key_equal_whitespace_equal_value() {
-        let key = "Host";
-        let sep = "  =  ";
-        let value = "my.host";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let tokens = lexer.tokenize().unwrap();
-
-        assert_eq!(tokens.len(), 3);
-        assert_eq!(tokens[0].kind, TokenKind::FieldKey);
-        assert_eq!(tokens[0].data, key);
-        assert_eq!(tokens[1].kind, TokenKind::FieldSeparator);
-        assert_eq!(tokens[1].data, sep);
-        assert_eq!(tokens[2].kind, TokenKind::FieldValue);
-        assert_eq!(tokens[2].data, value);
+        assert!(Lexer::new("Host=\"test").tokenize().is_err());
     }
 
     #[test]
     fn err_on_key_two_equal_value() {
-        let key = "Host";
-        let sep = "==";
-        let value = "my.host";
-        let data = format!("{key}{sep}{value}");
-
-        let lexer = Lexer::new(&data);
-        let err = lexer.tokenize();
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn whitespace_stops_at_newline() {
-        let tokens = Lexer::new("  \nHost x").tokenize().unwrap();
-        assert_eq!(tokens[0].data, "  ");
-        assert_eq!(tokens[1].kind, TokenKind::LineEnding);
+        assert!(Lexer::new("Host==my.host").tokenize().is_err());
     }
 
     #[test]
@@ -575,5 +423,14 @@ mod tests {
                 kind: ParseErrorKind::SeparatorHasMoreThanOneEqual,
             }
         );
+    }
+
+    // --- lossless ---
+
+    #[test]
+    fn display_round_trips_the_input() {
+        let data = "# c\nHost = a\r\n\tPort=22\n\n   ";
+        let round_tripped: String = lex(data).iter().map(LexItem::to_string).collect();
+        assert_eq!(round_tripped, data);
     }
 }
