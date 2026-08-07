@@ -3,7 +3,7 @@ use std::str::CharIndices;
 use std::{fmt, iter::Peekable};
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum TokenKind {
+pub(crate) enum TokenKind {
     WhiteSpace,
     LineEnding,
     Comment,
@@ -19,9 +19,9 @@ struct Position {
 }
 
 #[derive(Debug, Clone)]
-pub struct Token {
-    pub kind: TokenKind,
-    pub data: String,
+pub(crate) struct Token {
+    kind: TokenKind,
+    pub(crate) data: String,
     pos: Option<Position>,
 }
 
@@ -41,7 +41,7 @@ impl Token {
     }
 }
 
-pub struct Lexer<'a> {
+struct Lexer<'a> {
     data: &'a str,
     iter: Peekable<CharIndices<'a>>,
     line: usize,
@@ -49,7 +49,7 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(data: &'a str) -> Self {
+    fn new(data: &'a str) -> Self {
         Self {
             data,
             iter: data.char_indices().peekable(),
@@ -304,7 +304,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// <https://man7.org/linux/man-pages/man5/ssh_config.5.html>
-    pub fn tokenize(mut self) -> Result<Vec<Token>> {
+    fn tokenize(mut self) -> Result<Vec<Token>> {
         let mut tokens = Vec::new();
         while let Some(&(_, c)) = self.iter.peek() {
             match c {
