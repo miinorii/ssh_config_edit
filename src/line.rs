@@ -309,7 +309,7 @@ impl Line {
         Ok(self)
     }
 
-    /// Parse multiple `Line` from a `Vec<Token>`.
+    /// Parse multiple `Line` from a `Vec<LexItem>`.
     pub(crate) fn parse_lines(items: Vec<LexItem>) -> Result<Vec<Self>> {
         let mut iter = items.into_iter().peekable();
         let mut lines: Vec<Self> = Vec::new();
@@ -319,7 +319,7 @@ impl Line {
         Ok(lines)
     }
 
-    /// Parse the next line from the token stream.
+    /// Parse the next line from the LexItem stream.
     ///
     /// Assume each line can either be one of the following pattern:
     ///
