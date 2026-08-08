@@ -93,7 +93,7 @@ impl Directive {
             return Err(Error::EmptyKey);
         }
 
-        if value.is_empty() {
+        if value.chars().all(char::is_whitespace) {
             return Err(Error::EmptyValue);
         }
 
@@ -117,7 +117,7 @@ impl Directive {
     }
 
     pub fn set_value(&mut self, value: &str) -> Result<()> {
-        if value.len() == 0 || value.chars().all(char::is_whitespace) {
+        if value.chars().all(char::is_whitespace) {
             return Err(Error::EmptyValue);
         }
         self.value = value.into();
@@ -159,7 +159,7 @@ impl Selector {
             .as_selector_kind()
             .ok_or(Error::NotASelector(key.into()))?;
 
-        if value.is_empty() {
+        if value.chars().all(char::is_whitespace) {
             return Err(Error::EmptyValue);
         }
 
@@ -214,11 +214,7 @@ impl Selector {
     }
 
     pub fn kind(&self) -> SelectorKind {
-        match self.field_key() {
-            FieldKey::Host => SelectorKind::Host,
-            FieldKey::Match => SelectorKind::Match,
-            _ => unreachable!(""),
-        }
+        self.field_key().as_selector_kind().expect("validated in ::new")
     }
 
     pub fn value(&self) -> &str {
@@ -226,7 +222,7 @@ impl Selector {
     }
 
     pub fn set_value(&mut self, value: &str) -> Result<()> {
-        if value.len() == 0 || value.chars().all(char::is_whitespace) {
+        if value.chars().all(char::is_whitespace) {
             return Err(Error::EmptyValue);
         }
         self.value = value.into();
