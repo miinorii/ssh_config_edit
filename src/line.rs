@@ -149,7 +149,7 @@ impl Selector {
     pub fn new(key: &str, value: &str) -> Result<Self> {
         FieldKey::parse(key)
             .as_selector_kind()
-            .ok_or(Error::NotASelector(key.into()))?;
+            .ok_or_else(|| Error::NotASelector(key.into()))?;
 
         validate_value(value)?;
 
