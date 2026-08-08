@@ -129,6 +129,16 @@ impl Section {
         Ok(())
     }
 
+    /// # Panics
+    /// Panics if `index` is out of bounds
+    pub fn remove_line(&mut self, index: usize) -> Line {
+        self.body.remove(index)
+    }
+
+    pub fn retain_lines(&mut self, f: impl FnMut(&Line) -> bool) {
+        self.body.retain(f);
+    }
+
     pub fn indent(&self) -> Option<&str> {
         self.header
             .indent()
