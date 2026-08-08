@@ -133,7 +133,11 @@ impl Directive {
     }
 
     pub fn is_cumulative(&self) -> bool {
-        FieldKey::parse(&self.key).is_cumulative()
+        self.field_key().is_cumulative()
+    }
+
+    pub fn is_selector(&self) -> bool {
+        self.field_key().is_selector()
     }
 }
 
