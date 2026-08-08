@@ -170,6 +170,25 @@ impl Section {
         self.body.retain(f);
     }
 
+    /// Returns `&Line` at `index`.
+    /// # Panics
+    /// Panics if `index` is out of bounds.
+    pub fn line(&self, index: usize) -> &Line {
+        &self.body[index]
+    }
+
+    /// Returns `Line` at `index` with mutability.
+    /// # Panics
+    /// Panics if `index` is out of bounds.
+    pub fn line_mut(&mut self, index: usize) -> &mut Line {
+        &mut self.body[index]
+    }
+
+    /// Returns `Line` count.
+    pub fn line_count(&self) -> usize {
+        self.body.len()
+    }
+
     pub fn indent(&self) -> Option<&str> {
         self.header
             .indent()
