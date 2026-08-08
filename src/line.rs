@@ -111,6 +111,7 @@ pub struct Directive {
 }
 
 impl Directive {
+    /// Create a new `Directive` from a given `key` and `value`.
     pub fn new(key: &str, value: &str) -> Result<Self> {
         validate_key(key)?;
         validate_value(value)?;
@@ -122,6 +123,7 @@ impl Directive {
         })
     }
 
+    /// Construct a new `Directive` by consuming a given `key`, `sep` and `value`.
     pub(crate) fn from_parts(key: String, sep: String, value: String) -> Result<Self> {
         validate_key(&key)?;
         validate_sep(&sep)?;
@@ -163,10 +165,12 @@ impl Directive {
         Ok(self)
     }
 
+    /// Returns `true` if `key` is cumulative.
     pub fn is_cumulative(&self) -> bool {
         self.field_key().is_cumulative()
     }
 
+    /// Returns `true` if `key` is a selector.
     pub fn is_selector(&self) -> bool {
         self.field_key().is_selector()
     }
