@@ -52,6 +52,9 @@ impl Section {
     }
 
     /// Set default indent.
+    /// 
+    /// The default is a fallback used only when the section has 
+    /// no line to infer from, it never rewrites existing lines.
     pub fn set_default_indent(&mut self, indent: &str) -> Result<()> {
         self.default_decor.set_indent(indent)
     }
@@ -63,6 +66,9 @@ impl Section {
     }
 
     /// Set default ending.
+    /// 
+    /// The default is a fallback used only when the section has 
+    /// no line to infer from, it never rewrites existing lines.
     pub fn set_default_ending(&mut self, ending: &str) -> Result<()> {
         self.default_decor.set_ending(ending)
     }
