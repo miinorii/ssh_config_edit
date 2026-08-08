@@ -242,9 +242,17 @@ impl FieldKey {
         )
     }
 
+    pub fn as_selector_kind(&self) -> Option<SelectorKind> {
+        match self {
+            FieldKey::Host => Some(SelectorKind::Host),
+            FieldKey::Match => Some(SelectorKind::Match),
+            _ => None,
+        }
+    }
+
     /// Whether this keyword is a selector rather than a setting.
     pub fn is_selector(&self) -> bool {
-        matches!(self, FieldKey::Host | FieldKey::Match)
+        self.as_selector_kind().is_some()
     }
 
     /// The canonical spelling of the keyword (as documented in ssh_config(5)).
@@ -367,6 +375,11 @@ impl FromStr for FieldKey {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(FieldKey::parse(s))
     }
+}
+
+pub enum SelectorKind {
+    Host,
+    Match,
 }
 
 #[cfg(test)]
