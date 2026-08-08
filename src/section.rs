@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::error::{Result, Error};
 use crate::field_keys::FieldKey;
 use crate::line::{Directive, Line, LineKind, Selector};
 use std::fmt;
@@ -88,6 +88,25 @@ impl Section {
         self.directives_mut().filter(|d| d.field_key() == *key)
     }
 
+    /// Append `line` and add a line terminator to the previous header/line if none is set.
+    pub fn push_line(&mut self, mut line: Line) -> Result<()> {
+        match line.kind() {
+            LineKind::Directive(d) if d.is_selector() => {return Err(Error::UnexpectedSelector(line.to_string()))}, 
+            _ => {}
+        }
+
+        let line_ending = self.infer_line_ending();
+        let line_indent = self.infer_line_indent();
+
+        self.terminate(&line_ending)?;
+
+        line.set_indent_if_absent(&line_indent)?;
+        line.set_ending_if_absent(&line_ending)?;
+        
+        self.body.push(line);
+        Ok(())
+    }
+
     pub fn parse_sections(lines: Vec<Line>) -> Result<(Vec<Line>, Vec<Section>)> {
         let mut preamble: Vec<Line> = Vec::new();
         let mut sections: Vec<Section> = Vec::new();
@@ -130,20 +149,6 @@ impl Section {
 
     pub fn infer_line_indent(&self) -> String {
         self.indent().map_or_else(|| self.default_indent.clone(), |t| t.to_string())
-    }
-
-    /// Append `line` and add a line terminator to the previous header/line if none is set.
-    pub fn push_line(&mut self, mut line: Line) -> Result<()> {
-        let line_ending = self.infer_line_ending();
-        let line_indent = self.infer_line_indent();
-
-        self.terminate(&line_ending)?;
-
-        line.set_indent_if_absent(&line_indent)?;
-        line.set_ending_if_absent(&line_ending)?;
-        
-        self.body.push(line);
-        Ok(())
     }
 
     pub(crate) fn terminate(&mut self, ending: &str) -> Result<()> {

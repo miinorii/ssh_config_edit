@@ -39,6 +39,7 @@ pub enum Error {
     InvalidSeparator(String),
     InvalidLineEnding(String),
     NotASelector(String),
+    UnexpectedSelector(String),
     EmptyKey,
     EmptyValue,
 }
@@ -51,6 +52,7 @@ impl fmt::Display for Error {
             Error::InvalidLineEnding(s) => write!(f, "invalid line ending: {s:?}"),
             Error::InvalidSeparator(s) => write!(f, "invalid separator: {s:?}"),
             Error::NotASelector(s) => write!(f, "invalid key, not a selector: {s:?}"),
+            Error::UnexpectedSelector(s) => write!(f, "invalid line, unexpected selector: {s:?}"),
             Error::EmptyKey => write!(f, "empty key"),
             Error::EmptyValue => write!(f, "empty value"),
         }
