@@ -363,6 +363,10 @@ impl Line {
         })
     }
 
+    pub fn kind(&self) -> &LineKind {
+        &self.kind
+    }
+
     pub fn as_comment(&self) -> Option<&str> {
         match &self.kind {
             LineKind::Comment(s) => Some(s),
@@ -382,6 +386,10 @@ impl Line {
             LineKind::Directive(d) => Some(d),
             _ => None,
         }
+    }
+
+    pub fn directive(key: &str, value: &str) -> Result<Line> {
+        Ok(Line::from(Directive::new(key, value)?))
     }
 }
 
