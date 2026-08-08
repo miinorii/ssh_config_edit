@@ -11,6 +11,15 @@ pub const DEFAULT_LINE_ENDING: &str = "\n";
 
 pub const DEFAULT_LINE_INDENT: &str = "\t";
 
+fn valid_newline(line: &Line) -> Result<()> {
+    match line.kind() {
+        LineKind::Directive(d) if d.is_selector() => {
+            Err(Error::UnexpectedSelector(line.to_string()))
+        }
+        _ => Ok(())
+    }
+}
+
 pub struct Section {
     header: Selector,
     body: Vec<Line>,
@@ -90,13 +99,7 @@ impl Section {
 
     /// Append `line` and add a line terminator to the previous header/line if none is set.
     pub fn push_line(&mut self, mut line: Line) -> Result<()> {
-        match line.kind() {
-            LineKind::Directive(d) if d.is_selector() => {
-                return Err(Error::UnexpectedSelector(line.to_string()));
-            }
-            _ => {}
-        }
-
+        valid_newline(&line)?;
         let line_ending = self.infer_line_ending();
         let line_indent = self.infer_line_indent();
 
@@ -109,7 +112,19 @@ impl Section {
         Ok(())
     }
 
-    pub fn parse_sections(lines: Vec<Line>) -> Result<(Vec<Line>, Vec<Section>)> {
+    pub fn indent(&self) -> Option<&str> {
+        self.header
+            .indent()
+            .or_else(|| self.body.iter().find_map(Line::indent))
+    }
+
+    pub fn ending(&self) -> Option<&str> {
+        self.header
+            .ending()
+            .or_else(|| self.body.iter().find_map(Line::ending))
+    }
+
+    pub(crate) fn parse_sections(lines: Vec<Line>) -> Result<(Vec<Line>, Vec<Section>)> {
         let mut preamble: Vec<Line> = Vec::new();
         let mut sections: Vec<Section> = Vec::new();
 
@@ -133,24 +148,12 @@ impl Section {
         Ok((preamble, sections))
     }
 
-    pub fn indent(&self) -> Option<&str> {
-        self.header
-            .indent()
-            .or_else(|| self.body.iter().find_map(Line::indent))
-    }
-
-    pub fn ending(&self) -> Option<&str> {
-        self.header
-            .ending()
-            .or_else(|| self.body.iter().find_map(Line::ending))
-    }
-
-    pub fn infer_line_ending(&self) -> String {
+    pub(crate) fn infer_line_ending(&self) -> String {
         self.ending()
             .map_or_else(|| self.default_ending.clone(), |t| t.to_string())
     }
 
-    pub fn infer_line_indent(&self) -> String {
+    pub(crate) fn infer_line_indent(&self) -> String {
         self.indent()
             .map_or_else(|| self.default_indent.clone(), |t| t.to_string())
     }
