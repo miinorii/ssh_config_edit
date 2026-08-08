@@ -213,7 +213,9 @@ impl Selector {
     }
 
     pub fn kind(&self) -> SelectorKind {
-        self.field_key().as_selector_kind().expect("validated in ::new")
+        self.field_key()
+            .as_selector_kind()
+            .expect("validated in ::new")
     }
 
     pub fn value(&self) -> &str {

@@ -1,4 +1,4 @@
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 use crate::field_keys::FieldKey;
 use crate::line::{Directive, Line, LineKind, Selector};
 use std::fmt;
@@ -91,7 +91,9 @@ impl Section {
     /// Append `line` and add a line terminator to the previous header/line if none is set.
     pub fn push_line(&mut self, mut line: Line) -> Result<()> {
         match line.kind() {
-            LineKind::Directive(d) if d.is_selector() => {return Err(Error::UnexpectedSelector(line.to_string()))}, 
+            LineKind::Directive(d) if d.is_selector() => {
+                return Err(Error::UnexpectedSelector(line.to_string()));
+            }
             _ => {}
         }
 
@@ -102,7 +104,7 @@ impl Section {
 
         line.set_indent_if_absent(&line_indent)?;
         line.set_ending_if_absent(&line_ending)?;
-        
+
         self.body.push(line);
         Ok(())
     }
@@ -144,16 +146,18 @@ impl Section {
     }
 
     pub fn infer_line_ending(&self) -> String {
-        self.ending().map_or_else(|| self.default_ending.clone(), |t| t.to_string())
+        self.ending()
+            .map_or_else(|| self.default_ending.clone(), |t| t.to_string())
     }
 
     pub fn infer_line_indent(&self) -> String {
-        self.indent().map_or_else(|| self.default_indent.clone(), |t| t.to_string())
+        self.indent()
+            .map_or_else(|| self.default_indent.clone(), |t| t.to_string())
     }
 
     pub(crate) fn terminate(&mut self, ending: &str) -> Result<()> {
         self.header.set_ending_if_absent(ending)?;
-        if let Some(last_line) = self.body.last_mut(){
+        if let Some(last_line) = self.body.last_mut() {
             last_line.set_ending_if_absent(ending)?;
         }
         Ok(())
@@ -176,7 +180,10 @@ mod tests {
     }
 
     fn field_line(key: &str, value: &str) -> Line {
-        Line::directive(key, value).unwrap().with_indent("\t").unwrap()
+        Line::directive(key, value)
+            .unwrap()
+            .with_indent("\t")
+            .unwrap()
     }
 
     #[test]
