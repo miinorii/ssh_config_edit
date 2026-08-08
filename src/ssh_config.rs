@@ -167,10 +167,8 @@ impl SSHConfig {
             let ending = self.infer_line_ending();
             if let Some(prev) = self.sections.last_mut() {
                 prev.terminate(&ending)?;
-            } else if let Some(last_line) = self.preamble.last_mut()
-                && last_line.ending().is_none()
-            {
-                last_line.set_ending(&ending)?;
+            } else if let Some(last_line) = self.preamble.last_mut() {
+                last_line.set_ending_if_absent(&ending)?;
             }
         }
 
