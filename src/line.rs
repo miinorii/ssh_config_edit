@@ -321,10 +321,12 @@ impl From<Directive> for Line {
 }
 
 impl Line {
+    /// Create a new `Line::Directive` from a given `key` and `value`.
     pub fn directive(key: &str, value: &str) -> Result<Line> {
         Ok(Line::from(Directive::new(key, value)?))
     }
 
+    /// Create a new `Line::Comment` from a given `text`.
     pub fn comment(text: &str) -> Result<Line> {
         if text.contains(['\n', '\r']) {
             return Err(Error::InvalidComment(text.into()));
@@ -342,6 +344,7 @@ impl Line {
         })
     }
 
+    /// Create a new `Line::Blank`.
     pub fn blank() -> Line {
         Self {
             decor: Decor::default(),
@@ -432,6 +435,7 @@ impl Line {
         &self.kind
     }
 
+    /// Returns `Line::Comment` as `&str` and `None` otherwise.
     pub fn as_comment(&self) -> Option<&str> {
         match &self.kind {
             LineKind::Comment(s) => Some(s),
@@ -439,6 +443,7 @@ impl Line {
         }
     }
 
+    /// Returns `Line::Comment` as `&mut String` and `None` otherwise.
     pub fn as_comment_mut(&mut self) -> Option<&mut String> {
         match &mut self.kind {
             LineKind::Comment(s) => Some(s),
@@ -446,6 +451,7 @@ impl Line {
         }
     }
 
+    /// Returns `Line::Directive` as `&Directive` and `None` otherwise.
     pub fn as_directive(&self) -> Option<&Directive> {
         match &self.kind {
             LineKind::Directive(d) => Some(d),
@@ -453,6 +459,7 @@ impl Line {
         }
     }
 
+    /// Returns `Line::Directive` as `&mut Directive` and `None` otherwise.
     pub fn as_directive_mut(&mut self) -> Option<&mut Directive> {
         match &mut self.kind {
             LineKind::Directive(d) => Some(d),
@@ -460,6 +467,7 @@ impl Line {
         }
     }
 
+    /// Returns `true` if Line::Blank and `false` otherwise.
     pub fn is_blank(&self) -> bool {
         self.kind == LineKind::Blank
     }
