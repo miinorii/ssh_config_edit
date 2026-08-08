@@ -45,10 +45,9 @@ impl SSHConfig {
                 let mut existing: HashMap<FieldKey, Vec<(usize, String)>> = HashMap::new();
                 for (i, line) in s.lines().enumerate() {
                     if let Some(d) = line.as_directive() {
-                        let key = d.field_key();
-                        if key.is_cumulative() {
+                        if d.is_cumulative() {
                             existing
-                                .entry(key)
+                                .entry(d.field_key())
                                 .or_default()
                                 .push((i, d.value().to_string()));
                         }
