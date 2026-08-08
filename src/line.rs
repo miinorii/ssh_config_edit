@@ -323,12 +323,11 @@ impl Line {
     ///
     /// Assume each line can either be one of the following pattern:
     ///
-    /// - `[indent], comment, [line_ending]`
-    /// - `[indent], key, separator, value, [line_ending]`
-    /// - `indent, [line_ending]`
-    /// - `line_ending`
+    /// - `[Indent], Comment, [Ending]`
+    /// - `[Indent], Directive, [Ending]`
+    /// - `[Indent], [Ending]`
     ///
-    /// Optionnal token are denoted with `[]`
+    /// Optional token are denoted with `[]`
     fn parse_line(iter: &mut Peekable<vec::IntoIter<LexItem>>) -> Result<Line> {
         let indent = iter
             .next_if(|i| matches!(i, LexItem::Indent(_)))
