@@ -345,6 +345,10 @@ Host my.server.local
             {spaces}HostName{sep}1.2.3.4{lf}\
             {tab}User{sep}test{lf}\
             {lf}\
+            host{sep}b{lf}\
+            {spaces}HostName{sep}1.2.3.4{lf}\
+            {tab}User{sep}test{lf}\
+            {lf}\
             Host{sep_eq_ws}b{crlf}\
             {tab}Port{sep_eq}22{crlf}\
             {lf}\
