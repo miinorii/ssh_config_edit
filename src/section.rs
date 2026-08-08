@@ -112,6 +112,23 @@ impl Section {
         Ok(())
     }
 
+    /// Insert `line` at `index` and add a line terminator to the previous header/line if none is set.
+    /// # Panics
+    /// Panics if `index > self.lines.count()`
+    pub fn insert_line(&mut self, index: usize, mut line: Line) -> Result<()> {
+        valid_newline(&line)?;
+        let line_ending = self.infer_line_ending();
+        let line_indent = self.infer_line_indent();
+
+        self.terminate(&line_ending)?;
+
+        line.set_indent_if_absent(&line_indent)?;
+        line.set_ending_if_absent(&line_ending)?;
+
+        self.body.insert(index, line);
+        Ok(())
+    }
+
     pub fn indent(&self) -> Option<&str> {
         self.header
             .indent()
