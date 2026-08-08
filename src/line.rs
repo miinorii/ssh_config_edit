@@ -134,8 +134,7 @@ impl Directive {
 
 impl fmt::Display for Directive {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}{}", &self.key, &self.sep, &self.value)?;
-        Ok(())
+        write!(f, "{}{}{}", &self.key, &self.sep, &self.value)
     }
 }
 
