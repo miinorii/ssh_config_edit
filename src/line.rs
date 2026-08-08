@@ -109,6 +109,20 @@ impl Directive {
         })
     }
 
+    pub(crate) fn from_parts(key: String, sep: String, value: String) -> Result<Self> {
+        if key.is_empty() {
+            return Err(Error::EmptyKey);
+        }
+        validate_sep(&sep)?;
+        validate_value(&value)?;
+
+        Ok(Self {
+            key,
+            sep,
+            value
+        })
+    }
+
     pub fn key(&self) -> &str {
         &self.key
     }
@@ -362,7 +376,7 @@ impl Line {
         let kind = match iter.next_if(|i| !matches!(i, LexItem::Ending(_))) {
             Some(LexItem::Comment(text)) => LineKind::Comment(text),
             Some(LexItem::Directive { key, sep, value }) => {
-                LineKind::Directive(Directive::new(&key, &value)?.with_separator(&sep)?)
+                LineKind::Directive(Directive::from_parts(key, sep, value)?)
             }
             Some(LexItem::Indent(_)) => unreachable!("indent already checked"),
             Some(LexItem::Ending(_)) => unreachable!("excluded by next_if"),
