@@ -1,7 +1,6 @@
 use crate::error::Result;
 use crate::field_keys::FieldKey;
-use crate::lexer::Token;
-use crate::line::{Directive, Line};
+use crate::line::{Directive, Line, LineKind, Selector};
 use std::fmt;
 
 #[cfg(target_os = "windows")]
@@ -13,8 +12,8 @@ pub const DEFAULT_LINE_ENDING: &str = "\n";
 pub const DEFAULT_LINE_INDENT: &str = "\t";
 
 pub struct Section {
-    pub header: Directive,
-    pub body: Vec<Line>,
+    header: Selector,
+    body: Vec<Line>,
     default_indent: String,
     default_ending: String,
 }
@@ -30,7 +29,7 @@ impl fmt::Display for Section {
 }
 
 impl Section {
-    pub fn new(header: Directive) -> Self {
+    pub fn new(header: Selector) -> Self {
         Self {
             header,
             body: Vec::new(),
@@ -49,16 +48,57 @@ impl Section {
         self
     }
 
-    pub fn parse_sections(lines: Vec<Line>) -> (Vec<Line>, Vec<Section>) {
+    pub fn header(&self) -> &Selector {
+        &self.header
+    }
+
+    pub fn header_mut(&mut self) -> &mut Selector {
+        &mut self.header
+    }
+
+    pub fn lines(&self) -> impl Iterator<Item = &Line> {
+        self.body.iter()
+    }
+
+    pub fn lines_mut(&mut self) -> impl Iterator<Item = &mut Line> {
+        self.body.iter_mut()
+    }
+
+    pub fn directives(&self) -> impl Iterator<Item = &Directive> {
+        self.lines().filter_map(Line::as_directive)
+    }
+
+    pub fn directives_mut(&mut self) -> impl Iterator<Item = &mut Directive> {
+        self.lines_mut().filter_map(Line::as_directive_mut)
+    }
+
+    pub fn get(&self, key: &FieldKey) -> Option<&Directive> {
+        self.directives().find(|d| d.field_key() == *key)
+    }
+
+    pub fn get_mut(&mut self, key: &FieldKey) -> Option<&mut Directive> {
+        self.directives_mut().find(|d| d.field_key() == *key)
+    }
+
+    pub fn get_all(&self, key: &FieldKey) -> impl Iterator<Item = &Directive> {
+        self.directives().filter(|d| d.field_key() == *key)
+    }
+
+    pub fn get_all_mut(&mut self, key: &FieldKey) -> impl Iterator<Item = &mut Directive> {
+        self.directives_mut().filter(|d| d.field_key() == *key)
+    }
+
+    pub fn parse_sections(lines: Vec<Line>) -> Result<(Vec<Line>, Vec<Section>)> {
         let mut preamble: Vec<Line> = Vec::new();
         let mut sections: Vec<Section> = Vec::new();
 
         for line in lines {
-            match line {
-                Line::Directive(d) if FieldKey::parse(&d.key.data).is_selector() => {
-                    sections.push(Section::new(d));
+            match line.kind() {
+                LineKind::Directive(d) if d.field_key().is_selector() => {
+                    let selector: Selector = line.try_into()?;
+                    sections.push(Section::new(selector));
                 }
-                line => match sections.last_mut() {
+                _ => match sections.last_mut() {
                     Some(section) => section.body.push(line),
                     None => preamble.push(line),
                 },
@@ -66,34 +106,30 @@ impl Section {
         }
 
         for section in sections.iter_mut() {
-            section.default_ending = section.infer_line_ending();
-            section.default_indent = section.infer_line_indent();
+            section.default_ending = section.infer_line_ending().into();
+            section.default_indent = section.infer_line_indent().into();
         }
-        (preamble, sections)
+        Ok((preamble, sections))
     }
 
-    pub fn indent(&self) -> Option<&Token> {
+    pub fn indent(&self) -> Option<&str> {
         self.header
-            .indent
-            .as_ref()
+            .indent()
             .or_else(|| self.body.iter().find_map(Line::indent))
     }
 
-    pub fn ending(&self) -> Option<&Token> {
+    pub fn ending(&self) -> Option<&str> {
         self.header
-            .ending
-            .as_ref()
+            .ending()
             .or_else(|| self.body.iter().find_map(Line::ending))
     }
 
     pub fn infer_line_ending(&self) -> String {
-        self.ending()
-            .map_or_else(|| self.default_ending.clone(), |t| t.data.clone())
+        self.ending().map_or_else(|| self.default_ending.clone(), |t| t.to_string())
     }
 
     pub fn infer_line_indent(&self) -> String {
-        self.indent()
-            .map_or_else(|| self.default_indent.clone(), |t| t.data.clone())
+        self.indent().map_or_else(|| self.default_indent.clone(), |t| t.to_string())
     }
 
     /// Append `line` and add a line terminator to the previous header/line if none is set.
@@ -103,28 +139,17 @@ impl Section {
 
         self.terminate(&line_ending)?;
 
-        // add indent
-        if line.indent().is_none() {
-            line.set_indent(&line_indent)?;
-        }
-
-        // add ending
-        if line.ending().is_none() {
-            line.set_ending(&line_ending)?;
-        }
-
+        line.set_indent_if_absent(&line_indent)?;
+        line.set_ending_if_absent(&line_ending)?;
+        
         self.body.push(line);
         Ok(())
     }
 
-    pub fn terminate(&mut self, ending: &str) -> Result<()> {
-        if self.header.ending.is_none() {
-            self.header.set_ending(ending)?;
-        }
-        if let Some(last_line) = self.body.last_mut()
-            && last_line.ending().is_none()
-        {
-            last_line.set_ending(ending)?;
+    pub(crate) fn terminate(&mut self, ending: &str) -> Result<()> {
+        self.header.set_ending_if_absent(ending)?;
+        if let Some(last_line) = self.body.last_mut(){
+            last_line.set_ending_if_absent(ending)?;
         }
         Ok(())
     }
@@ -137,7 +162,7 @@ mod tests {
 
     fn parse(data: &str) -> (Vec<Line>, Vec<Section>) {
         let lines = Line::parse_lines(Lexer::new(data).tokenize().unwrap()).unwrap();
-        Section::parse_sections(lines)
+        Section::parse_sections(lines).unwrap()
     }
 
     fn section_from(data: &str) -> Section {
@@ -146,12 +171,7 @@ mod tests {
     }
 
     fn field_line(key: &str, value: &str) -> Line {
-        Line::Directive(
-            Directive::new(key, value)
-                .unwrap()
-                .with_indent("\t")
-                .unwrap(),
-        )
+        Line::directive(key, value).unwrap().with_indent("\t").unwrap()
     }
 
     #[test]
@@ -159,7 +179,7 @@ mod tests {
         let (preamble, sections) = parse("# c\nAddKeysToAgent yes\n\nHost a\n\tUser x\n");
         assert_eq!(preamble.len(), 3); // comment, directive, blank
         assert_eq!(sections.len(), 1);
-        assert_eq!(sections[0].header.value.data, "a");
+        assert_eq!(sections[0].header.value(), "a");
         assert_eq!(sections[0].body.len(), 1);
     }
 
@@ -167,7 +187,7 @@ mod tests {
     fn match_starts_a_new_section() {
         let (_, sections) = parse("Host a\n\tUser x\nMatch user foo\n\tPort 22\n");
         assert_eq!(sections.len(), 2);
-        assert_eq!(sections[1].header.key.data, "Match");
+        assert_eq!(sections[1].header.key(), "Match");
         assert_eq!(sections[1].body.len(), 1);
     }
 
