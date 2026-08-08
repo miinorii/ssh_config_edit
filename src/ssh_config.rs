@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::field_keys::FieldKey;
 use crate::lexer::Lexer;
-use crate::line::{Directive, Line, LineIterExt, LineIterMutExt};
+use crate::line::{Line, LineKind, Selector};
 use crate::section::{DEFAULT_LINE_ENDING, Section};
 use crate::settings::{Field, HostSettings};
 use std::collections::{HashMap, HashSet};
@@ -16,19 +16,19 @@ impl SSHConfig {
     pub fn new(data: &str) -> Result<SSHConfig> {
         let lexer = Lexer::new(data);
         let lines = Line::parse_lines(lexer.tokenize()?)?;
-        let (preamble, sections) = Section::parse_sections(lines);
+        let (preamble, sections) = Section::parse_sections(lines)?;
         Ok(SSHConfig { preamble, sections })
     }
 
     /// Infer line ending from the preamble and every section header.
     ///
-    /// Default to '\n' if no line ending is found.
+    /// Default to system default if no line ending is found.
     fn infer_line_ending(&self) -> String {
         self.preamble
             .iter()
             .find_map(Line::ending)
             .or_else(|| self.sections.iter().find_map(Section::ending))
-            .map_or_else(|| DEFAULT_LINE_ENDING.to_string(), |t| t.data.clone())
+            .map_or_else(|| DEFAULT_LINE_ENDING.to_string(), |t| t.to_string())
     }
 
     pub fn set_host_settings(&mut self, host_settings: &HostSettings) -> Result<()> {
@@ -36,18 +36,21 @@ impl SSHConfig {
         let target_section = self
             .sections
             .iter_mut()
-            .find(|s| s.header.value.data == host_settings.host);
+            .find(|s| s.header().value() == host_settings.host);
 
         match target_section {
             Some(s) => {
                 // ------ Cumulative key handling ------
-                // Existing cumulative directives grouped by key -> body indices.
-                let mut existing: HashMap<FieldKey, Vec<usize>> = HashMap::new();
-                for (i, line) in s.body.iter().enumerate() {
+                // Existing cumulative directives grouped by key -> (index, value).
+                let mut existing: HashMap<FieldKey, Vec<(usize, String)>> = HashMap::new();
+                for (i, line) in s.lines().enumerate() {
                     if let Some(d) = line.as_directive() {
-                        let key = FieldKey::parse(&d.key.data);
+                        let key = d.field_key();
                         if key.is_cumulative() {
-                            existing.entry(key).or_default().push(i);
+                            existing
+                                .entry(key)
+                                .or_default()
+                                .push((i, d.value().to_string()));
                         }
                     }
                 }
@@ -62,38 +65,43 @@ impl SSHConfig {
                     .iter()
                     .filter(|f| f.key.is_cumulative())
                 {
-                    // Each key once, first-appearance order
+                    // Each key once, first appearance order.
                     if !seen.insert(&field.key) {
                         continue;
                     }
+
                     let desired: Vec<&Field> = host_settings
                         .fields
                         .iter()
                         .filter(|f| f.key == field.key)
                         .collect();
-                    let indices: Vec<usize> = existing.get(&field.key).cloned().unwrap_or_default();
 
-                    let total_count = indices.len().min(desired.len());
-                    let valid_count = (0..total_count)
-                        .take_while(|&k| {
-                            s.body[indices[k]]
-                                .as_directive()
-                                .is_some_and(|d| d.value.data == desired[k].value)
-                        })
+                    let entries = existing
+                        .get(&field.key)
+                        .map(Vec::as_slice)
+                        .unwrap_or_default();
+
+                    // Keep the iter values that are identical to the new ones
+                    // then stop at the first divergence.
+                    let valid_count = entries
+                        .iter()
+                        .zip(&desired)
+                        .take_while(|(current, wanted)| current.1 == wanted.value)
                         .count();
 
-                    // From the first divergence drop the old lines, append the new values at the end
-                    to_remove.extend_from_slice(&indices[valid_count..]);
+                    // From the first divergence drop the old lines, append the new values at the end.
+                    // Order matters because `push_line` appends, so it cannot invalidate the indices collected here.
+                    to_remove.extend(entries[valid_count..].iter().map(|(i, _)| *i));
                     for field in &desired[valid_count..] {
-                        let directive = Directive::new(field.key.as_canonical_str(), &field.value)?;
-                        s.push_line(Line::Directive(directive))?;
+                        let line = Line::directive(field.key.as_canonical_str(), &field.value)?;
+                        s.push_line(line)?;
                     }
                 }
 
                 to_remove.sort();
                 to_remove.reverse();
                 for i in to_remove {
-                    s.body.remove(i);
+                    s.remove_line(i);
                 }
 
                 // ------ Non-cumulative key handling ------
@@ -102,30 +110,22 @@ impl SSHConfig {
                     .iter()
                     .filter(|f| !f.key.is_cumulative())
                 {
-                    // Try to find an existing key in every Line::Directive.
+                    // Try to find an existing key in every Directive.
                     //
                     // If found, replace its value non-destructively, otherwise create a new Line.
                     // That way, blank line and comments are preserved.
                     //
                     // When creating a new Line, indent is inferred from the target Section
                     // and line ending is inferred from every Line.
-                    let existing_line = s.body.iter_mut().any_directives_mut().find_map(|d| {
-                        if FieldKey::parse(&d.key.data) == field.key {
-                            Some(d)
-                        } else {
-                            None
-                        }
-                    });
-
+                    let existing_line = s.directives_mut().find(|d| d.field_key() == field.key);
                     match existing_line {
                         // Line exist -> in-place edit
-                        Some(l) => l.value.data = field.value.clone(),
+                        Some(l) => l.set_value(&field.value)?,
 
                         // Line does not exist, create one and append it to the Section
                         _ => {
-                            let new_directive =
-                                Directive::new(field.key.as_canonical_str(), &field.value)?;
-                            let new_line = Line::Directive(new_directive);
+                            let new_line =
+                                Line::directive(field.key.as_canonical_str(), &field.value)?;
                             s.push_line(new_line)?;
                         }
                     }
@@ -135,24 +135,23 @@ impl SSHConfig {
                 // Preserve comments and empty lines.
                 //
                 // Note: non-cumulative duplicates are kept intact by design
-                s.body.retain(|l| match l {
-                    Line::Directive(d) => host_settings
-                        .fields
-                        .iter()
-                        .any(|f| f.key == FieldKey::parse(&d.key.data)),
+                s.retain_lines(|l| match l.kind() {
+                    LineKind::Directive(d) => {
+                        host_settings.fields.iter().any(|f| f.key == d.field_key())
+                    }
                     _ => true,
                 });
             }
 
             // Whole new section
             None => {
-                let header = Directive::new(&FieldKey::Host.to_string(), &host_settings.host)?
+                let header = Selector::new(&FieldKey::Host.to_string(), &host_settings.host)?
                     .with_ending(&inferred_line_ending)?;
 
-                let mut new_section = Section::new(header).with_ending(&inferred_line_ending);
+                let mut new_section = Section::new(header).with_ending(&inferred_line_ending)?;
                 for field in &host_settings.fields {
-                    let param = Directive::new(&field.key.to_string(), &field.value)?;
-                    new_section.push_line(Line::Directive(param))?;
+                    let param = Line::directive(&field.key.to_string(), &field.value)?;
+                    new_section.push_line(param)?;
                 }
                 self.insert_section(0, new_section)?;
             }
@@ -183,20 +182,16 @@ impl SSHConfig {
     ///
     /// Note: matches only a literal exact `Host` value.
     pub fn exact_host_settings(&self, host: &str) -> HostSettings {
-        let directives = self
-            .sections
-            .iter()
-            .find(|s| s.header.value.data == host)
-            .into_iter()
-            .flat_map(|s| &s.body)
-            .any_directives();
-
         let mut settings = HostSettings::new(host);
-        for d in directives {
-            settings.add_field(Field {
-                key: FieldKey::parse(&d.key.data),
-                value: d.value.data.clone(),
-            });
+
+        let section = self.sections.iter().find(|s| s.header().value() == host);
+        if let Some(s) = section {
+            for d in s.directives() {
+                settings.add_field(Field {
+                    key: d.field_key(),
+                    value: d.value().to_string(),
+                });
+            }
         }
         settings
     }
