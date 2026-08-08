@@ -153,7 +153,7 @@ impl Directive {
 
 impl fmt::Display for Directive {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}{}", &self.key, &self.sep, &self.value)
+        write!(f, "{}{}{}", self.key, self.sep, self.value)
     }
 }
 
@@ -274,7 +274,7 @@ impl TryFrom<Line> for Selector {
 impl fmt::Display for Selector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.decor.write_indent(f)?;
-        write!(f, "{}{}{}", &self.key, &self.sep, &self.value)?;
+        write!(f, "{}{}{}", self.key, self.sep, self.value)?;
         self.decor.write_ending(f)
     }
 }
