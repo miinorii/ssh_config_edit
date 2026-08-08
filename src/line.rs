@@ -257,6 +257,15 @@ impl TryFrom<Line> for Selector {
     }
 }
 
+impl fmt::Display for Selector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.decor.write_indent(f)?;
+        write!(f, "{}{}{}", &self.key, &self.sep, &self.value)?;
+        self.decor.write_ending(f)?;
+        Ok(())
+    }
+}
+
 enum LineKind {
     Directive(Directive),
     Comment(String),
@@ -382,19 +391,13 @@ impl Line {
 
 impl fmt::Display for Line {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(indent) = self.decor.indent() {
-            write!(f, "{indent}")?;
-        }
-
+        self.decor.write_indent(f)?;
         match &self.kind {
             LineKind::Directive(d) => write!(f, "{d}")?,
             LineKind::Comment(text) => write!(f, "{text}")?,
             LineKind::Blank => {} //no-op
         }
-
-        if let Some(ending) = self.decor.ending() {
-            write!(f, "{ending}")?;
-        }
+        self.decor.write_ending(f)?;
         Ok(())
     }
 }
