@@ -25,17 +25,17 @@ fn validate_value(value: &str) -> Result<()> {
 }
 
 #[derive(Default)]
-struct Decor {
+pub(crate) struct Decor {
     indent: Option<String>,
     ending: Option<String>,
 }
 
 impl Decor {
-    fn indent(&self) -> Option<&str> {
+    pub(crate) fn indent(&self) -> Option<&str> {
         self.indent.as_deref()
     }
 
-    fn set_indent(&mut self, indent: &str) -> Result<()> {
+    pub(crate) fn set_indent(&mut self, indent: &str) -> Result<()> {
         if indent.chars().any(|c| !is_inline_ws(c)) || indent.is_empty() {
             return Err(Error::InvalidIndent(indent.into()));
         }
@@ -43,22 +43,27 @@ impl Decor {
         Ok(())
     }
 
-    fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
+    pub(crate) fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
         if self.indent.is_none() {
             self.set_indent(indent)?;
         }
         Ok(())
     }
 
+    pub(crate) fn with_indent(mut self, indent: &str) -> Result<Self> {
+        self.set_indent(indent)?;
+        Ok(self)
+    }
+
     pub(crate) fn write_indent(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.indent().unwrap_or(""))
     }
 
-    fn ending(&self) -> Option<&str> {
+    pub(crate) fn ending(&self) -> Option<&str> {
         self.ending.as_deref()
     }
 
-    fn set_ending(&mut self, ending: &str) -> Result<()> {
+    pub(crate) fn set_ending(&mut self, ending: &str) -> Result<()> {
         if ending != "\n" && ending != "\r\n" {
             return Err(Error::InvalidLineEnding(ending.into()));
         }
@@ -66,11 +71,16 @@ impl Decor {
         Ok(())
     }
 
-    fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
+    pub(crate) fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
         if self.ending.is_none() {
             self.set_ending(ending)?;
         }
         Ok(())
+    }
+
+    pub(crate) fn with_ending(mut self, ending: &str) -> Result<Self> {
+        self.set_ending(ending)?;
+        Ok(self)
     }
 
     pub(crate) fn write_ending(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
