@@ -28,13 +28,6 @@ impl LexItem {
             _ => None,
         }
     }
-
-    pub(crate) fn into_comment(self) -> Option<String> {
-        match self {
-            LexItem::Comment(s) => Some(s),
-            _ => None,
-        }
-    }
 }
 
 impl fmt::Display for LexItem {
