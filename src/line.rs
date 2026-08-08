@@ -1,10 +1,20 @@
 use crate::error::{Error, Result};
-use crate::field_keys::FieldKey;
+use crate::field_keys::{FieldKey, SelectorKind};
 use crate::lexer::LexItem;
 use std::{fmt, iter::Peekable, vec};
 
 fn is_inline_ws(c: char) -> bool {
     c.is_whitespace() && c != '\n' && c != '\r'
+}
+
+fn validate_sep(sep: &str) -> Result<()> {
+    if sep.chars().any(|c| !is_inline_ws(c) && c != '=')
+        || sep.chars().filter(|c| *c == '=').count() > 1
+        || sep.is_empty()
+    {
+        return Err(Error::InvalidSeparator(sep.into()));
+    }
+    Ok(())
 }
 
 #[derive(Default)]
@@ -118,13 +128,8 @@ impl Directive {
         &self.sep
     }
 
-    pub fn with_sep(mut self, sep: &str) -> Result<Self> {
-        if sep.chars().any(|c| !is_inline_ws(c) && c != '=')
-            || sep.chars().filter(|c| *c == '=').count() > 1
-            || sep.is_empty()
-        {
-            return Err(Error::InvalidSeparator(sep.into()));
-        }
+    pub fn with_separator(mut self, sep: &str) -> Result<Self> {
+        validate_sep(sep)?;
         self.sep = sep.into();
         Ok(self)
     }
@@ -141,11 +146,125 @@ impl fmt::Display for Directive {
     }
 }
 
-struct Selector {
+pub struct Selector {
     decor: Decor,
+    key: String,
     sep: String,
-    keyword: String,
     value: String,
+}
+
+impl Selector {
+    pub fn new(key: &str, value: &str) -> Result<Self> {
+        FieldKey::parse(key)
+            .as_selector_kind()
+            .ok_or(Error::NotASelector(key.into()))?;
+
+        if value.is_empty() {
+            return Err(Error::EmptyValue);
+        }
+
+        Ok(Self {
+            decor: Decor::default(),
+            key: key.into(),
+            sep: " ".into(),
+            value: value.into(),
+        })
+    }
+
+    pub fn indent(&self) -> Option<&str> {
+        self.decor.indent()
+    }
+
+    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
+        self.decor.set_indent(indent)
+    }
+
+    pub fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
+        self.decor.set_indent_if_absent(indent)
+    }
+
+    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
+        self.decor.set_indent(indent)?;
+        Ok(self)
+    }
+
+    pub fn ending(&self) -> Option<&str> {
+        self.decor.ending()
+    }
+
+    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
+        self.decor.set_ending(ending)
+    }
+
+    pub fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
+        self.decor.set_ending_if_absent(ending)
+    }
+
+    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
+        self.decor.set_ending(ending)?;
+        Ok(self)
+    }
+
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    pub fn field_key(&self) -> FieldKey {
+        FieldKey::parse(&self.key)
+    }
+
+    pub fn kind(&self) -> SelectorKind {
+        match self.field_key() {
+            FieldKey::Host => SelectorKind::Host,
+            FieldKey::Match => SelectorKind::Match,
+            _ => unreachable!(""),
+        }
+    }
+
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    pub fn set_value(&mut self, value: &str) -> Result<()> {
+        if value.len() == 0 || value.chars().all(char::is_whitespace) {
+            return Err(Error::EmptyValue);
+        }
+        self.value = value.into();
+        Ok(())
+    }
+
+    pub fn separator(&self) -> &str {
+        &self.sep
+    }
+
+    pub fn with_separator(mut self, sep: &str) -> Result<Self> {
+        validate_sep(sep)?;
+        self.sep = sep.into();
+        Ok(self)
+    }
+}
+
+impl TryFrom<Line> for Selector {
+    type Error = Error;
+
+    fn try_from(line: Line) -> Result<Self> {
+        let Line { decor, kind } = line;
+        match kind {
+            LineKind::Directive(d) if FieldKey::parse(&d.key).is_selector() => Ok(Self {
+                decor,
+                key: d.key,
+                sep: d.sep,
+                value: d.value,
+            }),
+            other => Err(Error::NotASelector(Line { decor, kind: other }.to_string())),
+        }
+    }
+}
+
+enum LineKind {
+    Directive(Directive),
+    Comment(String),
+    Blank,
 }
 
 pub struct Line {
@@ -153,10 +272,13 @@ pub struct Line {
     kind: LineKind,
 }
 
-enum LineKind {
-    Directive(Directive),
-    Comment(String),
-    Blank,
+impl From<Directive> for Line {
+    fn from(directive: Directive) -> Self {
+        Line {
+            decor: Decor::default(),
+            kind: LineKind::Directive(directive),
+        }
+    }
 }
 
 impl Line {
@@ -223,7 +345,7 @@ impl Line {
         let kind = match iter.next_if(|i| !matches!(i, LexItem::Ending(_))) {
             Some(LexItem::Comment(text)) => LineKind::Comment(text),
             Some(LexItem::Directive { key, sep, value }) => {
-                LineKind::Directive(Directive::new(&key, &value)?.with_sep(&sep)?)
+                LineKind::Directive(Directive::new(&key, &value)?.with_separator(&sep)?)
             }
             Some(LexItem::Indent(_)) => unreachable!("indent already checked"),
             Some(LexItem::Ending(_)) => unreachable!("excluded by next_if"),
@@ -385,27 +507,30 @@ mod tests {
 
     #[test]
     fn with_sep_accepts_valid_forms() {
-        assert!(sample_directive().with_sep(" ").is_ok());
-        assert!(sample_directive().with_sep("=").is_ok());
+        assert!(sample_directive().with_separator(" ").is_ok());
+        assert!(sample_directive().with_separator("=").is_ok());
         assert_eq!(
-            sample_directive().with_sep(" = ").unwrap().separator(),
+            sample_directive()
+                .with_separator(" = ")
+                .unwrap()
+                .separator(),
             " = "
         );
     }
 
     #[test]
     fn with_sep_rejects_double_equal() {
-        assert!(sample_directive().with_sep("==").is_err());
-        assert!(sample_directive().with_sep("a==").is_err());
+        assert!(sample_directive().with_separator("==").is_err());
+        assert!(sample_directive().with_separator("a==").is_err());
     }
 
     #[test]
     fn with_sep_rejects_newline() {
-        assert!(sample_directive().with_sep(" \n ").is_err());
+        assert!(sample_directive().with_separator(" \n ").is_err());
     }
 
     #[test]
     fn with_sep_rejects_empty() {
-        assert!(sample_directive().with_sep("").is_err());
+        assert!(sample_directive().with_separator("").is_err());
     }
 }
