@@ -17,6 +17,13 @@ fn validate_sep(sep: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_value(value: &str) -> Result<()> {
+    if value.chars().all(char::is_whitespace) {
+        return Err(Error::EmptyValue);
+    }
+    Ok(())
+}
+
 #[derive(Default)]
 struct Decor {
     indent: Option<String>,
@@ -83,9 +90,7 @@ impl Directive {
             return Err(Error::EmptyKey);
         }
 
-        if value.chars().all(char::is_whitespace) {
-            return Err(Error::EmptyValue);
-        }
+        validate_value(value)?;
 
         Ok(Self {
             key: key.into(),
@@ -107,9 +112,7 @@ impl Directive {
     }
 
     pub fn set_value(&mut self, value: &str) -> Result<()> {
-        if value.chars().all(char::is_whitespace) {
-            return Err(Error::EmptyValue);
-        }
+        validate_value(value)?;
         self.value = value.into();
         Ok(())
     }
@@ -149,9 +152,7 @@ impl Selector {
             .as_selector_kind()
             .ok_or(Error::NotASelector(key.into()))?;
 
-        if value.chars().all(char::is_whitespace) {
-            return Err(Error::EmptyValue);
-        }
+        validate_value(value)?;
 
         Ok(Self {
             decor: Decor::default(),
@@ -212,9 +213,7 @@ impl Selector {
     }
 
     pub fn set_value(&mut self, value: &str) -> Result<()> {
-        if value.chars().all(char::is_whitespace) {
-            return Err(Error::EmptyValue);
-        }
+        validate_value(value)?;
         self.value = value.into();
         Ok(())
     }
