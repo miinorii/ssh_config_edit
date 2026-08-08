@@ -17,9 +17,24 @@ fn validate_sep(sep: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_key(key: &str) -> Result<()> {
+    if key.chars().all(char::is_whitespace) {
+        return Err(Error::EmptyKey);
+    }
+
+    if key.contains(['\n', '\r']) {
+        return Err(Error::InvalidKey(key.into()));
+    }
+    Ok(())
+}
+
 fn validate_value(value: &str) -> Result<()> {
     if value.chars().all(char::is_whitespace) {
         return Err(Error::EmptyValue);
+    }
+
+    if value.contains(['\n', '\r']) {
+        return Err(Error::InvalidValue(value.into()));
     }
     Ok(())
 }
@@ -97,10 +112,7 @@ pub struct Directive {
 
 impl Directive {
     pub fn new(key: &str, value: &str) -> Result<Self> {
-        if key.is_empty() {
-            return Err(Error::EmptyKey);
-        }
-
+        validate_key(key)?;
         validate_value(value)?;
 
         Ok(Self {
@@ -111,9 +123,7 @@ impl Directive {
     }
 
     pub(crate) fn from_parts(key: String, sep: String, value: String) -> Result<Self> {
-        if key.is_empty() {
-            return Err(Error::EmptyKey);
-        }
+        validate_key(&key)?;
         validate_sep(&sep)?;
         validate_value(&value)?;
 
@@ -180,7 +190,6 @@ impl Selector {
         FieldKey::parse(key)
             .as_selector_kind()
             .ok_or_else(|| Error::NotASelector(key.into()))?;
-
         validate_value(value)?;
 
         Ok(Self {
