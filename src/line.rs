@@ -121,9 +121,14 @@ impl Directive {
         &self.sep
     }
 
-    pub fn with_separator(mut self, sep: &str) -> Result<Self> {
+    pub fn set_separator(&mut self, sep: &str) -> Result<()> {
         validate_sep(sep)?;
         self.sep = sep.into();
+        Ok(())
+    }
+
+    pub fn with_separator(mut self, sep: &str) -> Result<Self> {
+        self.set_separator(sep)?;
         Ok(self)
     }
 
@@ -221,9 +226,14 @@ impl Selector {
         &self.sep
     }
 
-    pub fn with_separator(mut self, sep: &str) -> Result<Self> {
+    pub fn set_separator(&mut self, sep: &str) -> Result<()> {
         validate_sep(sep)?;
         self.sep = sep.into();
+        Ok(())
+    }
+
+    pub fn with_separator(mut self, sep: &str) -> Result<Self> {
+        self.set_separator(sep)?;
         Ok(self)
     }
 }
