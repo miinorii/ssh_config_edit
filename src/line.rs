@@ -254,7 +254,7 @@ impl fmt::Display for Selector {
     }
 }
 
-enum LineKind {
+pub enum LineKind {
     Directive(Directive),
     Comment(String),
     Blank,
