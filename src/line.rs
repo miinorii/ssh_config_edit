@@ -260,7 +260,7 @@ impl TryFrom<Line> for Selector {
     fn try_from(line: Line) -> Result<Self> {
         let Line { decor, kind } = line;
         match kind {
-            LineKind::Directive(d) if FieldKey::parse(&d.key).is_selector() => Ok(Self {
+            LineKind::Directive(d) if d.is_selector() => Ok(Self {
                 decor,
                 key: d.key,
                 sep: d.sep,
