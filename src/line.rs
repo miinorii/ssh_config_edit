@@ -111,7 +111,16 @@ pub struct Directive {
 }
 
 impl Directive {
-    /// Create a new `Directive` from a given `key` and `value`.
+    /// Returns a new `Directive` from a given `key` and `value`.
+    /// 
+    /// `Directive` are used to represent individual config fields 
+    /// without indent or line ending:
+    /// ```text
+    /// Host dev 
+    ///     User test <- User Directive
+    /// Host local
+    ///     Port 12345 <- Port Directive
+    /// ```
     pub fn new(key: &str, value: &str) -> Result<Self> {
         validate_key(key)?;
         validate_value(value)?;
@@ -190,6 +199,16 @@ pub struct Selector {
 }
 
 impl Selector {
+    /// Returns a new `Selector` from a given `key` and `value`.
+    /// 
+    /// `Selector` are used to represent section headers 
+    /// with indent and line ending:
+    /// ```text
+    /// Host dev <- Host selector
+    ///     Port 12345
+    /// Match user git <- Match selector
+    ///     Port 12345
+    /// ```
     pub fn new(key: &str, value: &str) -> Result<Self> {
         FieldKey::parse(key)
             .as_selector_kind()
@@ -325,12 +344,28 @@ impl From<Directive> for Line {
 }
 
 impl Line {
-    /// Create a new `Line::Directive` from a given `key` and `value`.
+    /// Returns a new `Line::Directive` from a given `key` and `value`.
+    /// 
+    /// `Line::Directive` are used to represent individual config fields 
+    /// with indent and line ending:
+    /// ```text
+    /// Host dev 
+    ///     User test <- User Directive
+    /// Host local
+    ///     Port 12345 <- Port Directive
+    /// ```
     pub fn directive(key: &str, value: &str) -> Result<Line> {
         Ok(Line::from(Directive::new(key, value)?))
     }
 
-    /// Create a new `Line::Comment` from a given `text`.
+    /// Returns a new `Line::Comment` from a given `text`.
+    /// 
+    /// `Line::Comment` are used to represent comments:
+    /// ```text
+    /// # this is a comment <- Line::Comment
+    /// Host 1.2.3.4
+    ///     Port 1234
+    /// ``` 
     pub fn comment(text: &str) -> Result<Line> {
         if text.contains(['\n', '\r']) {
             return Err(Error::InvalidComment(text.into()));
@@ -348,7 +383,15 @@ impl Line {
         })
     }
 
-    /// Create a new `Line::Blank`.
+    /// Returns a new `Line::Blank`, on blank line whitespace 
+    /// data is stored inside `indent`.
+    /// 
+    /// `Line::Blank` are used to represent empty lines:
+    /// ```text
+    /// Host 1.2.3.4
+    ///     <- Line::Blank
+    ///     Port 1234
+    /// ``` 
     pub fn blank() -> Line {
         Self {
             decor: Decor::default(),
