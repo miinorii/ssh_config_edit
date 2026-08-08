@@ -88,6 +88,7 @@ impl Decor {
     }
 }
 
+#[derive(PartialEq)]
 pub struct Directive {
     key: String,
     sep: String,
@@ -116,11 +117,7 @@ impl Directive {
         validate_sep(&sep)?;
         validate_value(&value)?;
 
-        Ok(Self {
-            key,
-            sep,
-            value
-        })
+        Ok(Self { key, sep, value })
     }
 
     pub fn key(&self) -> &str {
@@ -293,6 +290,7 @@ impl fmt::Display for Selector {
     }
 }
 
+#[derive(PartialEq)]
 pub enum LineKind {
     Directive(Directive),
     Comment(String),
@@ -314,38 +312,32 @@ impl From<Directive> for Line {
 }
 
 impl Line {
-    pub fn indent(&self) -> Option<&str> {
-        self.decor.indent()
+    pub fn directive(key: &str, value: &str) -> Result<Line> {
+        Ok(Line::from(Directive::new(key, value)?))
     }
 
-    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
-        self.decor.set_indent(indent)
+    pub fn comment(text: &str) -> Result<Line> {
+        if text.contains(['\n', '\r']) {
+            return Err(Error::InvalidComment(text.into()));
+        }
+
+        let text = if text.starts_with('#') {
+            text.to_string()
+        } else {
+            format!("#{text}")
+        };
+
+        Ok(Self {
+            decor: Decor::default(),
+            kind: LineKind::Comment(text)
+        })
     }
 
-    pub fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
-        self.decor.set_indent_if_absent(indent)
-    }
-
-    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
-        self.decor.set_indent(indent)?;
-        Ok(self)
-    }
-
-    pub fn ending(&self) -> Option<&str> {
-        self.decor.ending()
-    }
-
-    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
-        self.decor.set_ending(ending)
-    }
-
-    pub fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
-        self.decor.set_ending_if_absent(ending)
-    }
-
-    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
-        self.decor.set_ending(ending)?;
-        Ok(self)
+    pub fn blank() -> Line {
+        Self {
+            decor: Decor::default(),
+            kind: LineKind::Blank,
+        }
     }
 
     /// Parse multiple `Line` from a `Vec<LexItem>`.
@@ -393,12 +385,53 @@ impl Line {
         })
     }
 
+    pub fn indent(&self) -> Option<&str> {
+        self.decor.indent()
+    }
+
+    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
+        self.decor.set_indent(indent)
+    }
+
+    pub fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
+        self.decor.set_indent_if_absent(indent)
+    }
+
+    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
+        self.decor.set_indent(indent)?;
+        Ok(self)
+    }
+
+    pub fn ending(&self) -> Option<&str> {
+        self.decor.ending()
+    }
+
+    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
+        self.decor.set_ending(ending)
+    }
+
+    pub fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
+        self.decor.set_ending_if_absent(ending)
+    }
+
+    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
+        self.decor.set_ending(ending)?;
+        Ok(self)
+    }
+
     pub fn kind(&self) -> &LineKind {
         &self.kind
     }
 
     pub fn as_comment(&self) -> Option<&str> {
         match &self.kind {
+            LineKind::Comment(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    pub fn as_comment_mut(&mut self) -> Option<&mut String> {
+        match &mut self.kind {
             LineKind::Comment(s) => Some(s),
             _ => None,
         }
@@ -418,8 +451,8 @@ impl Line {
         }
     }
 
-    pub fn directive(key: &str, value: &str) -> Result<Line> {
-        Ok(Line::from(Directive::new(key, value)?))
+    pub fn is_blank(&self) -> bool {
+        self.kind == LineKind::Blank
     }
 }
 
