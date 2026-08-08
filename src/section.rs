@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 use crate::field_keys::FieldKey;
-use crate::line::{Directive, Line, LineKind, Selector};
+use crate::line::{Decor, Directive, Line, LineKind, Selector};
 use std::fmt;
 
 #[cfg(target_os = "windows")]
@@ -16,15 +16,14 @@ fn valid_newline(line: &Line) -> Result<()> {
         LineKind::Directive(d) if d.is_selector() => {
             Err(Error::UnexpectedSelector(line.to_string()))
         }
-        _ => Ok(())
+        _ => Ok(()),
     }
 }
 
 pub struct Section {
     header: Selector,
     body: Vec<Line>,
-    default_indent: String,
-    default_ending: String,
+    default_decor: Decor,
 }
 
 impl fmt::Display for Section {
@@ -39,60 +38,87 @@ impl fmt::Display for Section {
 
 impl Section {
     pub fn new(header: Selector) -> Self {
+        let decor = Decor::default()
+            .with_indent(DEFAULT_LINE_INDENT.into())
+            .expect("default line indent can't fail")
+            .with_ending(DEFAULT_LINE_ENDING.into())
+            .expect("default line ending can't fail");
+
         Self {
             header,
             body: Vec::new(),
-            default_indent: DEFAULT_LINE_INDENT.into(),
-            default_ending: DEFAULT_LINE_ENDING.into(),
+            default_decor: decor,
         }
     }
 
-    pub fn with_indent(mut self, indent: &str) -> Self {
-        self.default_indent = indent.to_string();
-        self
+    /// Set default indent.
+    pub fn set_default_indent(&mut self, indent: &str) -> Result<()> {
+        self.default_decor.set_indent(indent)
     }
 
-    pub fn with_ending(mut self, ending: &str) -> Self {
-        self.default_ending = ending.to_string();
-        self
+    /// Returns `Self` with the default indent set to `indent`.
+    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
+        self.set_default_indent(indent)?;
+        Ok(self)
     }
 
+    /// Set default ending.
+    pub fn set_default_ending(&mut self, ending: &str) -> Result<()> {
+        self.default_decor.set_ending(ending)
+    }
+
+    /// Returns `Self` with the default ending set to `ending`.
+    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
+        self.set_default_ending(ending)?;
+        Ok(self)
+    }
+
+    /// Returns the current header.
     pub fn header(&self) -> &Selector {
         &self.header
     }
 
+    /// Returns the current header with mutability.
     pub fn header_mut(&mut self) -> &mut Selector {
         &mut self.header
     }
 
+    /// Returns an iterator over all lines.
     pub fn lines(&self) -> impl Iterator<Item = &Line> {
         self.body.iter()
     }
 
+    /// Returns an iterator that allow modifying all lines.
     pub fn lines_mut(&mut self) -> impl Iterator<Item = &mut Line> {
         self.body.iter_mut()
     }
 
+    /// Returns an iterator over all directives.
     pub fn directives(&self) -> impl Iterator<Item = &Directive> {
         self.lines().filter_map(Line::as_directive)
     }
 
+    /// Returns an iterator that allow modifying all directives.
     pub fn directives_mut(&mut self) -> impl Iterator<Item = &mut Directive> {
         self.lines_mut().filter_map(Line::as_directive_mut)
     }
 
+    /// Returns the first directive matching `key`.
     pub fn get(&self, key: &FieldKey) -> Option<&Directive> {
         self.directives().find(|d| d.field_key() == *key)
     }
 
+    /// Returns the first directive matching `key` with mutability.
     pub fn get_mut(&mut self, key: &FieldKey) -> Option<&mut Directive> {
         self.directives_mut().find(|d| d.field_key() == *key)
     }
 
+    /// Returns the all directives matching `key`.
     pub fn get_all(&self, key: &FieldKey) -> impl Iterator<Item = &Directive> {
         self.directives().filter(|d| d.field_key() == *key)
     }
 
+    /// Returns the all directives matching `key` with mutability.
     pub fn get_all_mut(&mut self, key: &FieldKey) -> impl Iterator<Item = &mut Directive> {
         self.directives_mut().filter(|d| d.field_key() == *key)
     }
@@ -114,7 +140,7 @@ impl Section {
 
     /// Insert `line` at `index` and add a line terminator to the previous header/line if none is set.
     /// # Panics
-    /// Panics if `index > self.lines.count()`
+    /// Panics if `index > self.lines.count()`.
     pub fn insert_line(&mut self, index: usize, mut line: Line) -> Result<()> {
         valid_newline(&line)?;
         let line_ending = self.infer_line_ending();
@@ -129,12 +155,17 @@ impl Section {
         Ok(())
     }
 
+    /// Remove `Line` at `index`.
     /// # Panics
-    /// Panics if `index` is out of bounds
+    /// Panics if `index` is out of bounds.
     pub fn remove_line(&mut self, index: usize) -> Line {
         self.body.remove(index)
     }
 
+    /// Retains only the elements specified by the predicate.
+    ///
+    /// In other words, remove all elements `e` for which `f(&e)` returns false.
+    /// This method operates in place, visiting each element exactly once in the original order, and preserves the order of the retained elements.
     pub fn retain_lines(&mut self, f: impl FnMut(&Line) -> bool) {
         self.body.retain(f);
     }
@@ -169,20 +200,24 @@ impl Section {
         }
 
         for section in sections.iter_mut() {
-            section.default_ending = section.infer_line_ending().into();
-            section.default_indent = section.infer_line_indent().into();
+            section.set_default_indent(&section.infer_line_indent())?;
+            section.set_default_ending(&section.infer_line_ending())?;
         }
         Ok((preamble, sections))
     }
 
     pub(crate) fn infer_line_ending(&self) -> String {
-        self.ending()
-            .map_or_else(|| self.default_ending.clone(), |t| t.to_string())
+        self.ending().map_or_else(
+            || self.default_decor.ending().expect("always set").to_string(),
+            |t| t.to_string(),
+        )
     }
 
     pub(crate) fn infer_line_indent(&self) -> String {
-        self.indent()
-            .map_or_else(|| self.default_indent.clone(), |t| t.to_string())
+        self.indent().map_or_else(
+            || self.default_decor.indent().expect("always set").to_string(),
+            |t| t.to_string(),
+        )
     }
 
     pub(crate) fn terminate(&mut self, ending: &str) -> Result<()> {
