@@ -31,9 +31,16 @@
 //! ```
 
 mod error;
-pub mod field_keys;
+mod field_keys;
 mod lexer;
-pub mod line;
-pub mod section;
-pub mod settings;
-pub mod ssh_config;
+mod line;
+mod section;
+mod settings;
+mod ssh_config;
+
+pub use error::{Error, ParseErrorKind, Result};
+pub use field_keys::{FieldKey, SelectorKind};
+pub use line::{Directive, Line, LineKind, Selector};
+pub use section::Section;
+pub use settings::{Field, HostSettings};
+pub use ssh_config::SSHConfig;
