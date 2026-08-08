@@ -324,7 +324,7 @@ impl Line {
         let text = if text.starts_with('#') {
             text.to_string()
         } else {
-            format!("#{text}")
+            format!("# {text}")
         };
 
         Ok(Self {
