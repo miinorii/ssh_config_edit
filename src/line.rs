@@ -39,7 +39,7 @@ impl Decor {
         if indent.chars().any(|c| !is_inline_ws(c)) || indent.is_empty() {
             return Err(Error::InvalidIndent(indent.into()));
         }
-        self.indent.insert(indent.into());
+        self.indent = Some(indent.into());
         Ok(())
     }
 
@@ -62,7 +62,7 @@ impl Decor {
         if ending != "\n" && ending != "\r\n" {
             return Err(Error::InvalidLineEnding(ending.into()));
         }
-        self.ending.insert(ending.into());
+        self.ending = Some(ending.into());
         Ok(())
     }
 
