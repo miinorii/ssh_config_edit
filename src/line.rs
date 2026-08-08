@@ -261,8 +261,7 @@ impl fmt::Display for Selector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.decor.write_indent(f)?;
         write!(f, "{}{}{}", &self.key, &self.sep, &self.value)?;
-        self.decor.write_ending(f)?;
-        Ok(())
+        self.decor.write_ending(f)
     }
 }
 
@@ -397,8 +396,7 @@ impl fmt::Display for Line {
             LineKind::Comment(text) => write!(f, "{text}")?,
             LineKind::Blank => {} //no-op
         }
-        self.decor.write_ending(f)?;
-        Ok(())
+        self.decor.write_ending(f)
     }
 }
 
