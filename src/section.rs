@@ -130,21 +130,8 @@ impl Section {
     }
 
     /// Append `line` and add a line terminator to the previous header/line if none is set.
-    pub fn push(&mut self, mut line: Line) -> Result<()> {
-        valid_newline(&line)?;
-        let line_ending = self.infer_line_ending();
-        let line_indent = self.infer_line_indent();
-
-        self.terminate(&line_ending)?;
-
-        // avoid useless indent on newly created blank lines
-        if !line.is_blank() {
-            line.set_indent_if_absent(&line_indent)?;
-        }
-        line.set_ending_if_absent(&line_ending)?;
-
-        self.body.push(line);
-        Ok(())
+    pub fn push(&mut self, line: Line) -> Result<()> {
+        self.insert(self.line_count(), line)
     }
 
     /// Insert `line` at `index` and add a line terminator to the previous header/line if none is set.
@@ -157,7 +144,10 @@ impl Section {
 
         self.terminate(&line_ending)?;
 
-        line.set_indent_if_absent(&line_indent)?;
+        // avoid useless indent on newly created blank lines
+        if !line.is_blank() {
+            line.set_indent_if_absent(&line_indent)?;
+        }
         line.set_ending_if_absent(&line_ending)?;
 
         self.body.insert(index, line);
