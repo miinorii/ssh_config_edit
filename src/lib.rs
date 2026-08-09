@@ -26,7 +26,7 @@
 //! [`SSHConfig`], [`Section`] and [`Line`].
 //!
 //! ```rust
-//! use ssh_config_edit::{FieldKey, Line, SSHConfig};
+//! use ssh_config_edit::{FieldKey, Line, SSHConfig, Section, Selector};
 //!
 //! # fn main() -> Result<(), ssh_config_edit::Error> {
 //! let mut config = SSHConfig::parse("# managed\nHost dev\n    Port=22\n")?;
@@ -41,6 +41,21 @@
 //! assert_eq!(
 //!     config.to_string(),
 //!     "# managed\nHost dev\n    Port=2222\n    # tuned\n"
+//! );
+//!
+//! // build a whole new section and append it
+//! let mut prod = Section::new(Selector::new("Host", "prod")?)
+//!     .with_indent("    ")?
+//!     .with_ending("\n")?;
+//! prod.push(Line::directive("HostName", "10.0.0.1")?)?;
+//! prod.push(Line::comment("gateway")?)?;
+//! prod.push(Line::blank())?;
+//! config.push_section(prod);
+//!
+//! assert_eq!(
+//!     config.to_string(),
+//!     "# managed\nHost dev\n    Port=2222\n    # tuned\n\
+//!      Host prod\n    HostName 10.0.0.1\n    # gateway\n\n"
 //! );
 //! # Ok(())
 //! # }
