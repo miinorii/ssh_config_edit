@@ -377,6 +377,7 @@ impl FromStr for FieldKey {
     }
 }
 
+#[derive(PartialEq)]
 pub enum SelectorKind {
     Host,
     Match,
