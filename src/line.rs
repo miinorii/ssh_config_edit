@@ -359,16 +359,16 @@ impl Line {
     }
 
     /// Returns a new [`Line`] of [`LineKind::Comment`] from a given `text`.
-    /// 
+    ///
     ///  `"# "` is prepended when `text` does not already start with `#`.
-    /// 
+    ///
     /// Such lines represent comments:
     /// ```text
     /// # this is a comment <- LineKind::Comment
     /// Host 1.2.3.4
     ///     Port 1234
     /// ```
-    /// 
+    ///
     /// # Errors
     /// Returns [`Error::InvalidComment`] if `text` contains `\n` or `\r`, since
     /// a comment spanning a line break would re-parse as two lines.
