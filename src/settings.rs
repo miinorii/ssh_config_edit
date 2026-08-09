@@ -38,9 +38,7 @@ impl HostSettings {
 
     /// Returns a singular [`Field`] value corresponding to a case-insensitive `key`.
     pub fn get_one(&self, key: &FieldKey) -> Option<&Field> {
-        self.fields
-            .iter()
-            .find(|f| f.key == *key)
+        self.fields.iter().find(|f| f.key == *key)
     }
 
     /// Returns a mutable singular [`Field`] value corresponding to a case-insensitive `key`.
@@ -53,9 +51,7 @@ impl HostSettings {
 
     /// Returns all [`Field`] values corresponding to a case-insensitive `key`.
     pub fn get_all(&self, key: &FieldKey) -> impl Iterator<Item = &Field> {
-        self.fields
-            .iter()
-            .filter(|f| f.key == *key)
+        self.fields.iter().filter(|f| f.key == *key)
     }
 
     /// Construct and push a new [`Field`] onto this [`HostSettings`].
