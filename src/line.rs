@@ -112,11 +112,11 @@ pub struct Directive {
 
 impl Directive {
     /// Returns a new `Directive` from a given `key` and `value`.
-    /// 
-    /// `Directive` are used to represent individual config fields 
+    ///
+    /// `Directive` are used to represent individual config fields
     /// without indent or line ending:
     /// ```text
-    /// Host dev 
+    /// Host dev
     ///     User test <- User Directive
     /// Host local
     ///     Port 12345 <- Port Directive
@@ -200,8 +200,8 @@ pub struct Selector {
 
 impl Selector {
     /// Returns a new `Selector` from a given `key` and `value`.
-    /// 
-    /// `Selector` are used to represent section headers 
+    ///
+    /// `Selector` are used to represent section headers
     /// with indent and line ending:
     /// ```text
     /// Host dev <- Host selector
@@ -345,11 +345,11 @@ impl From<Directive> for Line {
 
 impl Line {
     /// Returns a new `Line::Directive` from a given `key` and `value`.
-    /// 
-    /// `Line::Directive` are used to represent individual config fields 
+    ///
+    /// `Line::Directive` are used to represent individual config fields
     /// with indent and line ending:
     /// ```text
-    /// Host dev 
+    /// Host dev
     ///     User test <- User Directive
     /// Host local
     ///     Port 12345 <- Port Directive
@@ -359,13 +359,13 @@ impl Line {
     }
 
     /// Returns a new `Line::Comment` from a given `text`.
-    /// 
+    ///
     /// `Line::Comment` are used to represent comments:
     /// ```text
     /// # this is a comment <- Line::Comment
     /// Host 1.2.3.4
     ///     Port 1234
-    /// ``` 
+    /// ```
     pub fn comment(text: &str) -> Result<Line> {
         if text.contains(['\n', '\r']) {
             return Err(Error::InvalidComment(text.into()));
@@ -379,19 +379,19 @@ impl Line {
 
         Ok(Self {
             decor: Decor::default(),
-            kind: LineKind::Comment(text)
+            kind: LineKind::Comment(text),
         })
     }
 
-    /// Returns a new `Line::Blank`, on blank line whitespace 
+    /// Returns a new `Line::Blank`, on blank line whitespace
     /// data is stored inside `indent`.
-    /// 
+    ///
     /// `Line::Blank` are used to represent empty lines:
     /// ```text
     /// Host 1.2.3.4
     ///     <- Line::Blank
     ///     Port 1234
-    /// ``` 
+    /// ```
     pub fn blank() -> Line {
         Self {
             decor: Decor::default(),
