@@ -112,8 +112,7 @@ impl HostSettings {
         Ok(())
     }
 
-    /// Remove all occurrences of `key` via [`Self::remove_all`], then
-    /// [`Self::push`] `value`.
+    /// Remove all occurrences of `key` via [`Self::replace_all`].
     pub fn replace(&mut self, key: FieldKey, value: &str) -> Result<()> {
         self.replace_all(key, [value])
     }
