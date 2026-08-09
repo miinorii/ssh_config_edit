@@ -8,25 +8,42 @@
 //! [`SSHConfig`], [`HostSettings`], [`Field`] and [`FieldKey`].
 //!
 //! ```rust
-//! use ssh_config_edit::SSHConfig;
+//! use ssh_config_edit::{FieldKey, SSHConfig};
 //!
-//! fn main() {
-//!     todo!()
-//! }
+//! # fn main() -> Result<(), ssh_config_edit::Error> {
+//! let mut config = SSHConfig::parse("Host dev\n\tUser me\n")?;
 //!
+//! let mut settings = config.exact_host_settings("dev");
+//! settings.replace(FieldKey::Port, "2222")?;
+//! config.set_host_settings(&settings)?;
+//!
+//! assert_eq!(config.to_string(), "Host dev\n\tUser me\n\tPort 2222\n");
+//! # Ok(())
+//! # }
 //! ```
-//!
 //!
 //! The document layer is accessible through a lossless low-level abstraction with
 //! [`SSHConfig`], [`Section`] and [`Line`].
 //!
 //! ```rust
-//! use ssh_config_edit::SSHConfig;
+//! use ssh_config_edit::{FieldKey, Line, SSHConfig};
 //!
-//! fn main() {
-//!     todo!()
+//! # fn main() -> Result<(), ssh_config_edit::Error> {
+//! let mut config = SSHConfig::parse("# managed\nHost dev\n    Port=22\n")?;
+//!
+//! let section = config.section_mut("dev").expect("dev is declared");
+//! if let Some(port) = section.get_one_mut(&FieldKey::Port) {
+//!     port.set_value("2222")?;
 //! }
+//! section.push(Line::comment("tuned")?)?;
 //!
+//! // the '=' separator, the 4 space indent and the comment all survive
+//! assert_eq!(
+//!     config.to_string(),
+//!     "# managed\nHost dev\n    Port=2222\n    # tuned\n"
+//! );
+//! # Ok(())
+//! # }
 //! ```
 
 #![deny(rustdoc::broken_intra_doc_links)]
