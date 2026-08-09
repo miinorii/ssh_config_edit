@@ -224,7 +224,7 @@ impl FieldKey {
         }
     }
 
-    /// Whether this directive accumulates across matching keys (each
+    /// Whether this [`crate::Directive`] accumulates across matching keys (each
     /// occurrence is appended) rather than following first-match-wins.
     ///
     /// Derived from the `dump_cfg_strarray` and `dump_cfg_forwards` handling
@@ -250,7 +250,7 @@ impl FieldKey {
         }
     }
 
-    /// Whether this keyword is a selector rather than a setting.
+    /// Whether this keyword is a [`crate::Selector`] rather than a setting.
     pub fn is_selector(&self) -> bool {
         self.as_selector_kind().is_some()
     }

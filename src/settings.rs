@@ -36,7 +36,7 @@ impl HostSettings {
         self.fields.iter().any(|f| f.key == *key)
     }
 
-    /// Returns a singular field value corresponding to a case-insensitive `key`.
+    /// Returns a singular [`Field`] value corresponding to a case-insensitive `key`.
     pub fn get_one(&self, key: &FieldKey) -> Option<&str> {
         self.fields
             .iter()
@@ -44,7 +44,7 @@ impl HostSettings {
             .map(|f| f.value.as_str())
     }
 
-    /// Returns a mutable singular field value corresponding to a case-insensitive `key`.
+    /// Returns a mutable singular [`Field`] value corresponding to a case-insensitive `key`.
     pub fn get_one_mut(&mut self, key: &FieldKey) -> Option<&mut String> {
         self.fields
             .iter_mut()
@@ -52,7 +52,7 @@ impl HostSettings {
             .map(|f| &mut f.value)
     }
 
-    /// Returns all fields values corresponding to a case-insensitive key.
+    /// Returns all [`Field`] values corresponding to a case-insensitive `key`.
     pub fn get_all(&self, key: &FieldKey) -> impl Iterator<Item = &str> {
         self.fields
             .iter()
@@ -60,10 +60,11 @@ impl HostSettings {
             .map(|f| f.value.as_str())
     }
 
-    /// Construct and push a new `Field` to `HostSettings`.
+    /// Construct and push a new [`Field`] onto this [`HostSettings`].
     ///
-    /// Validation is done to ensure `key`
-    /// not a selector and does not already exist.
+    /// Validation ensures `key` is not a selector (see
+    /// [`FieldKey::is_selector`]) and, for non-cumulative keys, is not
+    /// already present.
     pub fn push(&mut self, key: FieldKey, value: &str) -> Result<()> {
         if key.is_selector() {
             return Err(Error::UnexpectedSelector(key.to_string()));
@@ -79,13 +80,47 @@ impl HostSettings {
         Ok(())
     }
 
-    /// Remove all occurence of `key` then push `value`.
-    pub fn replace(&mut self, key: FieldKey, value: &str) -> Result<()> {
-        self.remove_all(&key);
-        self.push(key, value)
+    /// Replace every value for `key` with `values` in order.
+    ///
+    /// An empty `values` is equivalent to [`remove_all`](Self::remove_all).
+    ///
+    /// # Errors
+    /// Returns [`Error::UnexpectedSelector`] if `key` is `Host` or `Match` and
+    /// [`Error::NotCumulative`] if more than one value is given for a
+    /// non-cumulative key. SSH honours only the first occurrence, so the rest
+    /// would be silently unreachable.
+    pub fn replace_all<I, S>(&mut self, key: FieldKey, values: I) -> Result<()>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        if key.is_selector() {
+            return Err(Error::UnexpectedSelector(key.to_string()));
+        }
+
+        // collected upfront so validation completes before anything is removed
+        let values: Vec<String> = values.into_iter().map(|v| v.into()).collect();
+
+        if values.len() > 1 && !key.is_cumulative() {
+            return Err(Error::NotCumulative(key.to_string()));
+        }
+
+        self.fields.retain(|f| f.key != key);
+        self.fields.extend(values.into_iter().map(|value| Field {
+            key: key.clone(),
+            value,
+        }));
+
+        Ok(())
     }
 
-    /// Remove all occurence of `key`.
+    /// Remove all occurrences of `key` via [`Self::remove_all`], then
+    /// [`Self::push`] `value`.
+    pub fn replace(&mut self, key: FieldKey, value: &str) -> Result<()> {
+        self.replace_all(key, [value])
+    }
+
+    /// Remove all occurrences of `key`.
     pub fn remove_all(&mut self, key: &FieldKey) -> bool {
         let count = self.field_count();
         self.fields.retain(|f| f.key != *key);
@@ -96,8 +131,8 @@ impl HostSettings {
         self.fields.is_empty()
     }
 
-    /// Construct and push a new `Field` while ensuring fields
-    /// are deduped the same way that `ssh -G` does
+    /// Construct and push a new [`Field`] while ensuring fields
+    /// are deduped the same way that `ssh -G` does.
     pub(crate) fn push_dedup(&mut self, key: FieldKey, value: &str) {
         if !self.contains_key(&key) || key.is_cumulative() {
             self.fields.push(Field {

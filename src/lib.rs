@@ -1,12 +1,11 @@
 //! This crate provides high and low level abstractions for
 //! reading and editing ssh_config files non-destructively.
 //!
-//! [SSHConfig](crate::SSHConfig) `parse` -> `to_string()` is byte-identical,
+//! [`SSHConfig`] `parse` -> `to_string()` is byte-identical,
 //! editing key K only changes the bytes of K's line.
 //!
-//! The semantic layer is accessible throught a lossy high-level abstraction with
-//! [SSHConfig](crate::SSHConfig), [HostSettings](crate::HostSettings),
-//! [Field](crate::Field) and [FieldKey](crate::FieldKey).
+//! The semantic layer is accessible through a lossy high-level abstraction with
+//! [`SSHConfig`], [`HostSettings`], [`Field`] and [`FieldKey`].
 //!
 //! ```rust
 //! use ssh_config_edit::SSHConfig;
@@ -18,8 +17,8 @@
 //! ```
 //!
 //!
-//! The document layer is accessible throught a lossless low-level abstraction with
-//! [SSHConfig](crate::SSHConfig), [Section](crate::Section) and [Line](crate::Line).
+//! The document layer is accessible through a lossless low-level abstraction with
+//! [`SSHConfig`], [`Section`] and [`Line`].
 //!
 //! ```rust
 //! use ssh_config_edit::SSHConfig;
@@ -29,6 +28,8 @@
 //! }
 //!
 //! ```
+
+#![deny(rustdoc::broken_intra_doc_links)]
 
 mod error;
 mod field_keys;

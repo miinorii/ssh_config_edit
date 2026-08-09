@@ -79,52 +79,52 @@ impl Section {
         Ok(self)
     }
 
-    /// Returns the current header.
+    /// Returns the current header as a [`Selector`].
     pub fn header(&self) -> &Selector {
         &self.header
     }
 
-    /// Returns the current header with mutability.
+    /// Returns the current header as a mutable [`Selector`].
     pub fn header_mut(&mut self) -> &mut Selector {
         &mut self.header
     }
 
-    /// Returns an iterator over all lines.
+    /// Returns an iterator over all [`Line`].
     pub fn lines(&self) -> impl Iterator<Item = &Line> {
         self.body.iter()
     }
 
-    /// Returns an iterator that allow modifying all lines.
+    /// Returns an iterator that allows modifying all [`Line`].
     pub fn lines_mut(&mut self) -> impl Iterator<Item = &mut Line> {
         self.body.iter_mut()
     }
 
-    /// Returns an iterator over all directives.
+    /// Returns an iterator over all [`Directive`].
     pub fn directives(&self) -> impl Iterator<Item = &Directive> {
         self.lines().filter_map(Line::as_directive)
     }
 
-    /// Returns an iterator that allow modifying all directives.
+    /// Returns an iterator that allows modifying all [`Directive`].
     pub fn directives_mut(&mut self) -> impl Iterator<Item = &mut Directive> {
         self.lines_mut().filter_map(Line::as_directive_mut)
     }
 
-    /// Returns the first directive matching `key`.
+    /// Returns the first [`Directive`] matching `key`.
     pub fn get_one(&self, key: &FieldKey) -> Option<&Directive> {
         self.directives().find(|d| d.field_key() == *key)
     }
 
-    /// Returns the first directive matching `key` with mutability.
+    /// Returns the first [`Directive`] matching `key` with mutability.
     pub fn get_one_mut(&mut self, key: &FieldKey) -> Option<&mut Directive> {
         self.directives_mut().find(|d| d.field_key() == *key)
     }
 
-    /// Returns the all directives matching `key`.
+    /// Returns all [`Directive`] matching `key`.
     pub fn get_all(&self, key: &FieldKey) -> impl Iterator<Item = &Directive> {
         self.directives().filter(|d| d.field_key() == *key)
     }
 
-    /// Returns the all directives matching `key` with mutability.
+    /// Returns all [`Directive`] matching `key` with mutability.
     pub fn get_all_mut(&mut self, key: &FieldKey) -> impl Iterator<Item = &mut Directive> {
         self.directives_mut().filter(|d| d.field_key() == *key)
     }
@@ -146,7 +146,7 @@ impl Section {
 
     /// Insert `line` at `index` and add a line terminator to the previous header/line if none is set.
     /// # Panics
-    /// Panics if `index > self.lines.count()`.
+    /// Panics if `index` is greater than [`Self::line_count`].
     pub fn insert(&mut self, index: usize, mut line: Line) -> Result<()> {
         valid_newline(&line)?;
         let line_ending = self.infer_line_ending();
@@ -161,7 +161,7 @@ impl Section {
         Ok(())
     }
 
-    /// Remove `Line` at `index`.
+    /// Remove the [`Line`] at `index`.
     /// # Panics
     /// Panics if `index` is out of bounds.
     pub fn remove(&mut self, index: usize) -> Line {
@@ -176,21 +176,21 @@ impl Section {
         self.body.retain(f);
     }
 
-    /// Returns `&Line` at `index`.
+    /// Returns the [`Line`] at `index`.
     /// # Panics
     /// Panics if `index` is out of bounds.
     pub fn line(&self, index: usize) -> &Line {
         &self.body[index]
     }
 
-    /// Returns `Line` at `index` with mutability.
+    /// Returns the [`Line`] at `index` with mutability.
     /// # Panics
     /// Panics if `index` is out of bounds.
     pub fn line_mut(&mut self, index: usize) -> &mut Line {
         &mut self.body[index]
     }
 
-    /// Returns `Line` count.
+    /// Returns the [`Line`] count.
     pub fn line_count(&self) -> usize {
         self.body.len()
     }

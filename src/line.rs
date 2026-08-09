@@ -111,9 +111,9 @@ pub struct Directive {
 }
 
 impl Directive {
-    /// Returns a new `Directive` from a given `key` and `value`.
+    /// Returns a new [`Directive`] from a given `key` and `value`.
     ///
-    /// `Directive` are used to represent individual config fields
+    /// [`Directive`] represents individual config fields
     /// without indent or line ending:
     /// ```text
     /// Host dev
@@ -132,7 +132,7 @@ impl Directive {
         })
     }
 
-    /// Construct a new `Directive` by consuming a given `key`, `sep` and `value`.
+    /// Construct a new [`Directive`] by consuming a given `key`, `sep` and `value`.
     pub(crate) fn from_parts(key: String, sep: String, value: String) -> Result<Self> {
         validate_key(&key)?;
         validate_sep(&sep)?;
@@ -174,12 +174,12 @@ impl Directive {
         Ok(self)
     }
 
-    /// Returns `true` if `key` is cumulative.
+    /// Returns `true` if `key` is cumulative, see [`FieldKey::is_cumulative`].
     pub fn is_cumulative(&self) -> bool {
         self.field_key().is_cumulative()
     }
 
-    /// Returns `true` if `key` is a selector.
+    /// Returns `true` if `key` is a selector, see [`FieldKey::is_selector`].
     pub fn is_selector(&self) -> bool {
         self.field_key().is_selector()
     }
@@ -199,9 +199,9 @@ pub struct Selector {
 }
 
 impl Selector {
-    /// Returns a new `Selector` from a given `key` and `value`.
+    /// Returns a new [`Selector`] from a given `key` and `value`.
     ///
-    /// `Selector` are used to represent section headers
+    /// [`Selector`] represents section headers
     /// with indent and line ending:
     /// ```text
     /// Host dev <- Host selector
@@ -344,9 +344,9 @@ impl From<Directive> for Line {
 }
 
 impl Line {
-    /// Returns a new `Line::Directive` from a given `key` and `value`.
+    /// Returns a new [`Line`] of [`LineKind::Directive`] from a given `key` and `value`.
     ///
-    /// `Line::Directive` are used to represent individual config fields
+    /// Such lines represent individual config fields
     /// with indent and line ending:
     /// ```text
     /// Host dev
@@ -358,11 +358,11 @@ impl Line {
         Ok(Line::from(Directive::new(key, value)?))
     }
 
-    /// Returns a new `Line::Comment` from a given `text`.
+    /// Returns a new [`Line`] of [`LineKind::Comment`] from a given `text`.
     ///
-    /// `Line::Comment` are used to represent comments:
+    /// Such lines represent comments:
     /// ```text
-    /// # this is a comment <- Line::Comment
+    /// # this is a comment <- LineKind::Comment
     /// Host 1.2.3.4
     ///     Port 1234
     /// ```
@@ -383,13 +383,13 @@ impl Line {
         })
     }
 
-    /// Returns a new `Line::Blank`, on blank line whitespace
-    /// data is stored inside `indent`.
+    /// Returns a new [`Line`] of [`LineKind::Blank`], on a blank line whitespace
+    /// data is stored inside [`Self::indent`].
     ///
-    /// `Line::Blank` are used to represent empty lines:
+    /// Such lines represent empty lines:
     /// ```text
     /// Host 1.2.3.4
-    ///     <- Line::Blank
+    ///     <- LineKind::Blank
     ///     Port 1234
     /// ```
     pub fn blank() -> Line {
@@ -399,7 +399,7 @@ impl Line {
         }
     }
 
-    /// Parse multiple `Line` from a `Vec<LexItem>`.
+    /// Parse multiple [`Line`] from a `Vec<LexItem>`.
     pub(crate) fn parse_lines(items: Vec<LexItem>) -> Result<Vec<Self>> {
         let mut iter = items.into_iter().peekable();
         let mut lines: Vec<Self> = Vec::new();
@@ -482,7 +482,7 @@ impl Line {
         &self.kind
     }
 
-    /// Returns `Line::Comment` as `&str` and `None` otherwise.
+    /// Returns the [`LineKind::Comment`] text as `&str` and `None` otherwise.
     pub fn as_comment(&self) -> Option<&str> {
         match &self.kind {
             LineKind::Comment(s) => Some(s),
@@ -490,7 +490,7 @@ impl Line {
         }
     }
 
-    /// Returns `Line::Comment` as `&mut String` and `None` otherwise.
+    /// Returns the [`LineKind::Comment`] text as `&mut String` and `None` otherwise.
     pub fn as_comment_mut(&mut self) -> Option<&mut String> {
         match &mut self.kind {
             LineKind::Comment(s) => Some(s),
@@ -498,7 +498,8 @@ impl Line {
         }
     }
 
-    /// Returns `Line::Directive` as `&Directive` and `None` otherwise.
+    /// Returns the [`LineKind::Directive`] payload as [`&Directive`](Directive)
+    /// and `None` otherwise.
     pub fn as_directive(&self) -> Option<&Directive> {
         match &self.kind {
             LineKind::Directive(d) => Some(d),
@@ -506,7 +507,8 @@ impl Line {
         }
     }
 
-    /// Returns `Line::Directive` as `&mut Directive` and `None` otherwise.
+    /// Returns the [`LineKind::Directive`] payload as [`&mut Directive`](Directive)
+    /// and `None` otherwise.
     pub fn as_directive_mut(&mut self) -> Option<&mut Directive> {
         match &mut self.kind {
             LineKind::Directive(d) => Some(d),
@@ -514,7 +516,7 @@ impl Line {
         }
     }
 
-    /// Returns `true` if Line::Blank and `false` otherwise.
+    /// Returns `true` if this is a [`LineKind::Blank`] and `false` otherwise.
     pub fn is_blank(&self) -> bool {
         self.kind == LineKind::Blank
     }

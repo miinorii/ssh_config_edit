@@ -20,7 +20,7 @@ impl SSHConfig {
         Ok(SSHConfig { preamble, sections })
     }
 
-    /// Infer line ending from the preamble and every section header.
+    /// Infer line ending from the preamble and every [`Section`] header.
     ///
     /// Default to system default if no line ending is found.
     fn infer_line_ending(&self) -> String {
@@ -175,9 +175,10 @@ impl SSHConfig {
         Ok(())
     }
 
-    /// Return the settings declared under the `Host` exactly matching the provided `host`.
+    /// Return the settings declared under the [`FieldKey::Host`] exactly matching
+    /// the provided `host`.
     ///
-    /// Note: matches only a literal exact `Host` value.
+    /// Note: matches only a literal exact [`FieldKey::Host`] value.
     pub fn exact_host_settings(&self, host: &str) -> HostSettings {
         let mut settings = HostSettings::new(host);
 
