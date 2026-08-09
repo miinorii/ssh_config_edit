@@ -7,8 +7,8 @@ pub struct Field {
 }
 
 pub struct HostSettings {
-    pub host: String,
-    pub fields: Vec<Field>,
+    host: String,
+    fields: Vec<Field>,
 }
 
 impl HostSettings {
@@ -19,8 +19,16 @@ impl HostSettings {
         }
     }
 
-    /// Add and dedupe fields the same way that `ssh -G` does
-    pub fn add_field(&mut self, field: Field) {
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    pub fn fields(&self) -> impl Iterator<Item = &Field> {
+        self.fields.iter()
+    }
+
+    /// Add and dedupe fields in `HostSettings` the same way that `ssh -G` does
+    pub(crate) fn add_field(&mut self, field: Field) {
         if !self.contains_key(&field.key) || field.key.is_cumulative() {
             self.fields.push(field);
         }
@@ -47,13 +55,11 @@ impl HostSettings {
             .collect()
     }
 
-    #[inline]
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }
 
-    #[inline]
-    pub fn len(&self) -> usize {
+    pub fn field_count(&self) -> usize {
         self.fields.len()
     }
 }
