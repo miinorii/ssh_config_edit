@@ -1,6 +1,6 @@
-use std::collections::HashSet;
 use crate::error::{Error, Result};
 use crate::field_keys::FieldKey;
+use std::collections::HashSet;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Field {
@@ -25,10 +25,12 @@ impl HostSettings {
         &self.host
     }
 
-   /// Returns each distinct [`FieldKey`] once in first-appearance order.
+    /// Returns each distinct [`FieldKey`] once in first-appearance order.
     pub fn keys(&self) -> impl Iterator<Item = &FieldKey> {
         let mut seen = HashSet::new();
-        self.fields().map(|f| &f.key).filter(move |k| seen.insert(*k))
+        self.fields()
+            .map(|f| &f.key)
+            .filter(move |k| seen.insert(*k))
     }
 
     pub fn fields(&self) -> impl Iterator<Item = &Field> {
