@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use crate::error::{Error, Result};
 use crate::field_keys::FieldKey;
 
@@ -22,6 +23,12 @@ impl HostSettings {
 
     pub fn host(&self) -> &str {
         &self.host
+    }
+
+   /// Returns each distinct [`FieldKey`] once in first-appearance order.
+    pub fn keys(&self) -> impl Iterator<Item = &FieldKey> {
+        let mut seen = HashSet::new();
+        self.fields().map(|f| &f.key).filter(move |k| seen.insert(*k))
     }
 
     pub fn fields(&self) -> impl Iterator<Item = &Field> {
