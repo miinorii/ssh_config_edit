@@ -13,11 +13,101 @@ pub struct SSHConfig {
 }
 
 impl SSHConfig {
-    pub fn new(data: &str) -> Result<SSHConfig> {
+    /// Parse `data` into an editable document.
+    ///
+    /// The result round-trips byte for byte: `parse(data).to_string() == data`.
+    ///
+    /// # Errors
+    /// Returns [`Error::Parse`](crate::Error::Parse) if `data` is not valid
+    /// `ssh_config(5)` carrying the line and column of the offending character.
+    pub fn parse(data: &str) -> Result<SSHConfig> {
         let lexer = Lexer::new(data);
         let lines = Line::parse_lines(lexer.tokenize()?)?;
         let (preamble, sections) = Section::parse_sections(lines)?;
         Ok(SSHConfig { preamble, sections })
+    }
+
+    /// Returns an iterator over every [`Section`] in document order.
+    pub fn sections(&self) -> impl Iterator<Item = &Section> {
+        self.sections.iter()
+    }
+
+    /// Returns an iterator that allows modifying every [`Section`],
+    /// in document order.
+    pub fn sections_mut(&mut self) -> impl Iterator<Item = &mut Section> {
+        self.sections.iter_mut()
+    }
+
+    /// Returns the first [`Section`] whose header value is exactly `pattern`.
+    ///
+    /// The match is on the selector's raw text and is kind-agnostic, so
+    /// `section("dev prod")` finds `Host dev prod` and `section("user git")`
+    /// finds `Match user git`. No glob expansion happens here, see
+    /// [`Self::resolve_host_settings`] for that.
+    pub fn section(&self, pattern: &str) -> Option<&Section> {
+        self.sections().find(|s| s.header().value() == pattern)
+    }
+
+    /// Returns the first [`Section`] whose header value is exactly `pattern`
+    /// with mutability. See [`Self::section`] for the matching rules.
+    pub fn section_mut(&mut self, pattern: &str) -> Option<&mut Section> {
+        self.sections_mut().find(|s| s.header().value() == pattern)
+    }
+
+    /// Returns an iterator over the preamble, the [`Line`] appearing before the
+    /// first selector.
+    pub fn preamble(&self) -> impl Iterator<Item = &Line> {
+        self.preamble.iter()
+    }
+
+    /// Returns an iterator that allows modifying the preamble, the [`Line`]
+    /// appearing before the first selector.
+    pub fn preamble_mut(&mut self) -> impl Iterator<Item = &mut Line> {
+        self.preamble.iter_mut()
+    }
+
+    /// Insert `section` at `index`, terminating the preceding section or
+    /// preamble line when it has no line ending of its own.
+    ///
+    /// `index == self.sections().count()` appends.
+    ///
+    /// # Panics
+    /// Panics if `index` is greater than the number of sections.
+    pub fn insert_section(&mut self, index: usize, section: Section) {
+        // Ensure previous last line has a line ending
+        if index == self.sections.len() {
+            let ending = self.infer_line_ending();
+            if let Some(prev) = self.sections.last_mut() {
+                prev.terminate(&ending)
+                    .expect("line ending should always be valid here");
+            } else if let Some(last_line) = self.preamble.last_mut() {
+                last_line
+                    .set_ending_if_absent(&ending)
+                    .expect("line ending should always be valid here");
+            }
+        }
+
+        self.sections.insert(index, section);
+    }
+
+    /// Remove and return the [`Section`] at `index`.
+    ///
+    /// # Panics
+    /// Panics if `index` is out of bounds.
+    pub fn remove_section(&mut self, index: usize) -> Section {
+        self.sections.remove(index)
+    }
+
+    /// Remove and return the first [`Section`] whose header value is exactly
+    /// `pattern`, or `None` if no section matches.
+    ///
+    /// See [`Self::section`] for the matching rules.
+    pub fn remove_selector(&mut self, pattern: &str) -> Option<Section> {
+        let index = self
+            .sections
+            .iter()
+            .position(|s| s.header().value() == pattern)?;
+        Some(self.sections.remove(index))
     }
 
     /// Infer line ending from the preamble and every [`Section`] header.
@@ -31,6 +121,22 @@ impl SSHConfig {
             .map_or_else(|| DEFAULT_LINE_ENDING.to_string(), |t| t.to_string())
     }
 
+    /// Reconcile `host_settings` back into the document.
+    ///
+    /// If a section already matches [`HostSettings::host`] it is edited in
+    /// place, otherwise a new one is inserted at the top. Editing is
+    /// non-destructive: existing directives keep their separator and indent,
+    /// comments and blank lines are preserved, and only the bytes of changed
+    /// keys move.
+    ///
+    /// Directives whose key is absent from `host_settings` are removed.
+    /// Cumulative keys keep the leading run of values that already match, then
+    /// diverging values are dropped and the new ones appended in order.
+    ///
+    /// # Errors
+    /// Returns [`Error::UnexpectedSelector`](crate::Error::UnexpectedSelector)
+    /// if `host_settings` holds a selector key, and
+    /// [`Error::EmptyValue`](crate::Error::EmptyValue) if a value is blank.
     pub fn set_host_settings(&mut self, host_settings: &HostSettings) -> Result<()> {
         let inferred_line_ending = self.infer_line_ending();
         let target_section = self
@@ -141,33 +247,22 @@ impl SSHConfig {
                     let param = Line::directive(&field.key.to_string(), &field.value)?;
                     new_section.push(param)?;
                 }
-                self.insert_section(0, new_section)?;
+                self.insert_section(0, new_section);
             }
         }
         Ok(())
     }
 
-    /// # Panics
-    /// Panics if `index > self.sections.len()`
-    fn insert_section(&mut self, index: usize, section: Section) -> Result<()> {
-        // Ensure previous last line has a line ending
-        if index == self.sections.len() {
-            let ending = self.infer_line_ending();
-            if let Some(prev) = self.sections.last_mut() {
-                prev.terminate(&ending)?;
-            } else if let Some(last_line) = self.preamble.last_mut() {
-                last_line.set_ending_if_absent(&ending)?;
-            }
-        }
-
-        self.sections.insert(index, section);
-        Ok(())
-    }
-
-    /// Return the settings declared under the [`FieldKey::Host`] exactly matching
-    /// the provided `host`.
+    /// Return the settings declared under the section whose header value is
+    /// exactly `host`.
     ///
-    /// Note: matches only a literal exact [`FieldKey::Host`] value.
+    /// No pattern expansion, and no walking of other matching sections. Values
+    /// are deduped the way `ssh -G` reads a file: a repeated non-cumulative key
+    /// keeps its first occurrence. See [`Self::resolve_host_settings`] for the
+    /// full resolution.
+    ///
+    /// An unknown `host` yields an empty [`HostSettings`], which is
+    /// indistinguishable from a section that declares nothing.
     pub fn exact_host_settings(&self, host: &str) -> HostSettings {
         let mut settings = HostSettings::new(host);
 
@@ -180,7 +275,14 @@ impl SSHConfig {
         settings
     }
 
-    // Resolve the settings for a given `host` mimicking `ssh -G` behaviour.
+    /// Resolve the settings for a given `host`, mimicking `ssh -G` behaviour.
+    ///
+    /// Unlike [`Self::exact_host_settings`] this expands patterns, walks every
+    /// matching section in document order, and applies first-match-wins for
+    /// non-cumulative keys.
+    ///
+    /// # Panics
+    /// Not implemented yet, always panics.
     pub fn resolve_host_settings(&self, _host: &str) -> HostSettings {
         todo!("no done yet");
     }
@@ -209,12 +311,15 @@ Host my.server.local
     Hostname 1.2.3.4
 ";
 
-        let config = SSHConfig::new(data).unwrap();
+        let config = SSHConfig::parse(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.field_count(), 1);
 
         assert!(host_params.contains_key(&FieldKey::Hostname));
-        assert_eq!(host_params.get_one(&FieldKey::Hostname).unwrap(), "1.2.3.4");
+        assert_eq!(
+            host_params.get_one(&FieldKey::Hostname).unwrap().value,
+            "1.2.3.4"
+        );
     }
 
     #[test]
@@ -225,13 +330,16 @@ Host my.server.local
     User test
 ";
 
-        let config = SSHConfig::new(data).unwrap();
+        let config = SSHConfig::parse(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.field_count(), 2);
         assert!(host_params.contains_key(&FieldKey::Hostname));
-        assert_eq!(host_params.get_one(&FieldKey::Hostname).unwrap(), "1.2.3.4");
+        assert_eq!(
+            host_params.get_one(&FieldKey::Hostname).unwrap().value,
+            "1.2.3.4"
+        );
         assert!(host_params.contains_key(&FieldKey::User));
-        assert_eq!(host_params.get_one(&FieldKey::User).unwrap(), "test");
+        assert_eq!(host_params.get_one(&FieldKey::User).unwrap().value, "test");
     }
 
     #[test]
@@ -242,11 +350,11 @@ Host my.server.local
     User second
 ";
 
-        let config = SSHConfig::new(data).unwrap();
+        let config = SSHConfig::parse(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
         assert_eq!(host_params.field_count(), 1);
         assert!(host_params.contains_key(&FieldKey::User));
-        assert_eq!(host_params.get_one(&FieldKey::User).unwrap(), "first");
+        assert_eq!(host_params.get_one(&FieldKey::User).unwrap().value, "first");
     }
 
     #[test]
@@ -257,18 +365,18 @@ Host my.server.local
     IdentityFile ~/.ssh/fake_key2
 ";
 
-        let config = SSHConfig::new(data).unwrap();
+        let config = SSHConfig::parse(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
-        let cumulative_params: Vec<&str> = host_params.get_all(&FieldKey::IdentityFile).collect();
+        let cumulative_params: Vec<&Field> = host_params.get_all(&FieldKey::IdentityFile).collect();
         assert_eq!(cumulative_params.len(), 2);
-        assert_eq!(cumulative_params[0], "~/.ssh/fake_key1");
-        assert_eq!(cumulative_params[1], "~/.ssh/fake_key2");
+        assert_eq!(cumulative_params[0].value, "~/.ssh/fake_key1");
+        assert_eq!(cumulative_params[1].value, "~/.ssh/fake_key2");
     }
 
     #[test]
     fn match_options_do_not_leak_into_host() {
         let data = "Host a\n\tUser x\nMatch user foo\n\tPort 22\n";
-        let config = SSHConfig::new(data).unwrap();
+        let config = SSHConfig::parse(data).unwrap();
         let settings = config.exact_host_settings("a");
         assert_eq!(settings.field_count(), 1);
         assert!(!settings.contains_key(&FieldKey::Port));
@@ -276,26 +384,30 @@ Host my.server.local
 
     #[test]
     fn set_host_settings_creates_missing_host() {
-        let mut config = SSHConfig::new("Host b\n\tUser bob\n").unwrap();
+        let mut config = SSHConfig::parse("Host b\n\tUser bob\n").unwrap();
         let mut new_host = HostSettings::new("a");
         new_host.push_dedup(FieldKey::Hostname, "1.2.3.4");
         config.set_host_settings(&new_host).unwrap();
 
         let a = config.exact_host_settings("a");
-        assert_eq!(a.get_one(&FieldKey::Hostname), Some("1.2.3.4"));
+        assert_eq!(a.get_one(&FieldKey::Hostname).unwrap().value, "1.2.3.4");
         let b = config.exact_host_settings("b"); // existing host untouched
-        assert_eq!(b.get_one(&FieldKey::User), Some("bob"));
+        assert_eq!(b.get_one(&FieldKey::User).unwrap().value, "bob");
     }
 
     #[test]
     fn set_host_settings_on_empty_config() {
-        let mut config = SSHConfig::new("").unwrap();
+        let mut config = SSHConfig::parse("").unwrap();
         let mut new_host = HostSettings::new("a");
         new_host.push_dedup(FieldKey::User, "me");
         config.set_host_settings(&new_host).unwrap();
         assert_eq!(
-            config.exact_host_settings("a").get_one(&FieldKey::User),
-            Some("me")
+            config
+                .exact_host_settings("a")
+                .get_one(&FieldKey::User)
+                .unwrap()
+                .value,
+            "me"
         );
     }
 
@@ -336,19 +448,19 @@ Host my.server.local
             {lf}\
             {trailing_ws}"
         );
-        assert_eq!(SSHConfig::new(&data).unwrap().to_string(), data);
+        assert_eq!(SSHConfig::parse(&data).unwrap().to_string(), data);
     }
 
     // --- Line endings ---
     #[test]
     fn infer_line_ending_lf() {
-        let config = SSHConfig::new("Host a\n\tUser x\n").unwrap();
+        let config = SSHConfig::parse("Host a\n\tUser x\n").unwrap();
         assert_eq!(config.infer_line_ending(), "\n");
     }
 
     #[test]
     fn infer_line_ending_crlf() {
-        let config = SSHConfig::new("Host a\r\n\tUser x\r\n").unwrap();
+        let config = SSHConfig::parse("Host a\r\n\tUser x\r\n").unwrap();
         assert_eq!(config.infer_line_ending(), "\r\n");
     }
 
@@ -356,26 +468,26 @@ Host my.server.local
     fn infer_line_ending_from_comment_only_preamble() {
         // guards the Line::ending widening: no directives anywhere, ending
         // must still be found on a Comment line
-        let config = SSHConfig::new("# managed by hand\r\n").unwrap();
+        let config = SSHConfig::parse("# managed by hand\r\n").unwrap();
         assert_eq!(config.infer_line_ending(), "\r\n");
     }
 
     #[test]
     fn infer_line_ending_uses_document_order() {
         // preamble says LF, section says CRLF: first ending in the file wins
-        let config = SSHConfig::new("AddKeysToAgent yes\nHost a\r\n\tUser x\r\n").unwrap();
+        let config = SSHConfig::parse("AddKeysToAgent yes\nHost a\r\n\tUser x\r\n").unwrap();
         assert_eq!(config.infer_line_ending(), "\n");
     }
 
     #[test]
     fn infer_line_ending_defaults_on_empty_config() {
-        let config = SSHConfig::new("").unwrap();
+        let config = SSHConfig::parse("").unwrap();
         assert_eq!(config.infer_line_ending(), DEFAULT_LINE_ENDING);
     }
 
     #[test]
     fn infer_line_ending_defaults_when_file_has_no_ending() {
-        let config = SSHConfig::new("Host a").unwrap(); // single unterminated line
+        let config = SSHConfig::parse("Host a").unwrap(); // single unterminated line
         assert_eq!(config.infer_line_ending(), DEFAULT_LINE_ENDING);
     }
 
@@ -383,7 +495,7 @@ Host my.server.local
 
     #[test]
     fn set_updates_value_in_place_preserving_formatting() {
-        let mut config = SSHConfig::new("Host a\n\tPort=22\n# trailing comment\n").unwrap();
+        let mut config = SSHConfig::parse("Host a\n\tPort=22\n# trailing comment\n").unwrap();
         let mut settings = HostSettings::new("a");
         settings.push_dedup(FieldKey::Port, "2222");
         config.set_host_settings(&settings).unwrap();
@@ -397,11 +509,9 @@ Host my.server.local
 
     #[test]
     fn set_matches_existing_key_case_insensitively() {
-        let mut config = SSHConfig::new("Host a\n\thostname 1.1.1.1\n").unwrap();
+        let mut config = SSHConfig::parse("Host a\n\thostname 1.1.1.1\n").unwrap();
         let mut settings = HostSettings::new("a");
-        settings.push_dedup(FieldKey::Hostname,
-            "2.2.2.2"
-        );
+        settings.push_dedup(FieldKey::Hostname, "2.2.2.2");
         config.set_host_settings(&settings).unwrap();
 
         // lowercase spelling in the file is preserved, no canonicalization on edit
@@ -410,7 +520,7 @@ Host my.server.local
 
     #[test]
     fn set_append_key_matching_section_style() {
-        let mut config = SSHConfig::new("Host a\r\n    User x\r\n").unwrap();
+        let mut config = SSHConfig::parse("Host a\r\n    User x\r\n").unwrap();
         let mut settings = config.exact_host_settings("a");
         settings.push_dedup(FieldKey::Hostname, "1.2.3.4");
         config.set_host_settings(&settings).unwrap();
@@ -424,7 +534,7 @@ Host my.server.local
 
     #[test]
     fn set_creates_missing_host_with_inferred_crlf() {
-        let mut config = SSHConfig::new("Host b\r\n\tUser bob\r\n").unwrap();
+        let mut config = SSHConfig::parse("Host b\r\n\tUser bob\r\n").unwrap();
         let mut settings = HostSettings::new("a");
         settings.push_dedup(FieldKey::Hostname, "1.2.3.4");
         config.set_host_settings(&settings).unwrap();
@@ -438,7 +548,7 @@ Host my.server.local
 
     #[test]
     fn set_creates_host_on_empty_config_with_defaults() {
-        let mut config = SSHConfig::new("").unwrap();
+        let mut config = SSHConfig::parse("").unwrap();
         let mut settings = HostSettings::new("a");
         settings.push_dedup(FieldKey::User, "me");
         config.set_host_settings(&settings).unwrap();
@@ -452,7 +562,7 @@ Host my.server.local
 
     #[test]
     fn set_terminates_unterminated_preamble_before_inserting() {
-        let mut config = SSHConfig::new("AddKeysToAgent yes").unwrap();
+        let mut config = SSHConfig::parse("AddKeysToAgent yes").unwrap();
         let mut settings = HostSettings::new("a");
         settings.push_dedup(FieldKey::User, "me");
         config.set_host_settings(&settings).unwrap();
@@ -466,7 +576,7 @@ Host my.server.local
 
     #[test]
     fn set_removes_keys_absent_from_settings() {
-        let mut config = SSHConfig::new(
+        let mut config = SSHConfig::parse(
             "Host a\n\t# keep me\n\tHostname 1.2.3.4\n\tForwardAgent yes\n\tUser x\nHost b\n\tForwardAgent yes\n",
         )
         .unwrap();
@@ -486,7 +596,7 @@ Host my.server.local
     #[test]
     fn cumulative_valid_preserved_divergence_appended() {
         let mut config =
-            SSHConfig::new("Host a\n\tIdentityFile ~/.ssh/key1\n\tIdentityFile ~/.ssh/key2\n")
+            SSHConfig::parse("Host a\n\tIdentityFile ~/.ssh/key1\n\tIdentityFile ~/.ssh/key2\n")
                 .unwrap();
 
         let mut settings = HostSettings::new("a");
@@ -506,7 +616,7 @@ Host my.server.local
     #[test]
     fn cumulative_divergence_preserves_desired_order() {
         let mut config =
-            SSHConfig::new("Host a\n\tIdentityFile A\n\tIdentityFile B\n\tIdentityFile C\n")
+            SSHConfig::parse("Host a\n\tIdentityFile A\n\tIdentityFile B\n\tIdentityFile C\n")
                 .unwrap();
 
         let mut settings = HostSettings::new("a");
@@ -527,7 +637,7 @@ Host my.server.local
 
     #[test]
     fn cumulative_shrink_removes_extra() {
-        let mut config = SSHConfig::new("Host a\n\tIdentityFile A\n\tIdentityFile B\n").unwrap();
+        let mut config = SSHConfig::parse("Host a\n\tIdentityFile A\n\tIdentityFile B\n").unwrap();
 
         let mut settings = HostSettings::new("a");
         settings.push_dedup(FieldKey::IdentityFile, "A");
@@ -538,7 +648,7 @@ Host my.server.local
 
     #[test]
     fn cumulative_grow_appends_new() {
-        let mut config = SSHConfig::new("Host a\n\tIdentityFile A\n").unwrap();
+        let mut config = SSHConfig::parse("Host a\n\tIdentityFile A\n").unwrap();
 
         let mut settings = HostSettings::new("a");
         settings.push_dedup(FieldKey::IdentityFile, "A");
@@ -554,7 +664,7 @@ Host my.server.local
     #[test]
     fn cumulative_full_match_noop() {
         let data = "Host a\n    IdentityFile A\n    # note\n    IdentityFile B\n";
-        let mut config = SSHConfig::new(data).unwrap();
+        let mut config = SSHConfig::parse(data).unwrap();
 
         let mut settings = HostSettings::new("a");
         settings.push_dedup(FieldKey::IdentityFile, "A");
@@ -567,7 +677,7 @@ Host my.server.local
     #[test]
     fn cumulative_key_absent_from_desired_is_removed() {
         let mut config =
-            SSHConfig::new("Host a\n\tIdentityFile A\n\tIdentityFile B\n\tUser bob\n").unwrap();
+            SSHConfig::parse("Host a\n\tIdentityFile A\n\tIdentityFile B\n\tUser bob\n").unwrap();
 
         let mut settings = HostSettings::new("a");
         settings.push_dedup(FieldKey::User, "bob");
@@ -578,7 +688,7 @@ Host my.server.local
 
     #[test]
     fn cumulative_interleaved_keys_both_diverge() {
-        let mut config = SSHConfig::new(
+        let mut config = SSHConfig::parse(
             "Host a\n\tSetEnv A=1\n\tIdentityFile k1\n\tSetEnv B=2\n\tIdentityFile k2\n",
         )
         .unwrap();
