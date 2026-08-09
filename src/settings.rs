@@ -63,7 +63,7 @@ impl HostSettings {
     /// Construct and push a new [`Field`] onto this [`HostSettings`].
     ///
     /// Validation ensures `key` is not a selector (see
-    /// [`FieldKey::is_selector`]) and, for non-cumulative keys, is not
+    /// [`FieldKey::is_selector`]) and for non-cumulative keys if not
     /// already present.
     pub fn push(&mut self, key: FieldKey, value: &str) -> Result<()> {
         if key.is_selector() {
