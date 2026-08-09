@@ -137,7 +137,10 @@ impl Section {
 
         self.terminate(&line_ending)?;
 
-        line.set_indent_if_absent(&line_indent)?;
+        // avoid useless indent on newly created blank lines
+        if !line.is_blank() {
+            line.set_indent_if_absent(&line_indent)?;
+        }
         line.set_ending_if_absent(&line_ending)?;
 
         self.body.push(line);
