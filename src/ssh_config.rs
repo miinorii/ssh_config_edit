@@ -36,7 +36,7 @@ impl SSHConfig {
         let target_section = self
             .sections
             .iter_mut()
-            .find(|s| s.header().value() == host_settings.host);
+            .find(|s| s.header().value() == host_settings.host());
 
         match target_section {
             Some(s) => {
@@ -59,19 +59,14 @@ impl SSHConfig {
                 // at the end of the current section.
                 let mut to_remove: Vec<usize> = Vec::new();
                 let mut seen: HashSet<&FieldKey> = HashSet::new();
-                for field in host_settings
-                    .fields
-                    .iter()
-                    .filter(|f| f.key.is_cumulative())
-                {
+                for field in host_settings.fields().filter(|f| f.key.is_cumulative()) {
                     // Each key once, first appearance order.
                     if !seen.insert(&field.key) {
                         continue;
                     }
 
                     let desired: Vec<&Field> = host_settings
-                        .fields
-                        .iter()
+                        .fields()
                         .filter(|f| f.key == field.key)
                         .collect();
 
@@ -93,22 +88,18 @@ impl SSHConfig {
                     to_remove.extend(entries[valid_count..].iter().map(|(i, _)| *i));
                     for field in &desired[valid_count..] {
                         let line = Line::directive(field.key.as_canonical_str(), &field.value)?;
-                        s.push_line(line)?;
+                        s.push(line)?;
                     }
                 }
 
                 to_remove.sort();
                 to_remove.reverse();
                 for i in to_remove {
-                    s.remove_line(i);
+                    s.remove(i);
                 }
 
                 // ------ Non-cumulative key handling ------
-                for field in host_settings
-                    .fields
-                    .iter()
-                    .filter(|f| !f.key.is_cumulative())
-                {
+                for field in host_settings.fields().filter(|f| !f.key.is_cumulative()) {
                     // Try to find an existing key in every Directive.
                     //
                     // If found, replace its value non-destructively, otherwise create a new Line.
@@ -116,7 +107,7 @@ impl SSHConfig {
                     //
                     // When creating a new Line, indent is inferred from the target Section
                     // and line ending is inferred from every Line.
-                    let existing_line = s.directives_mut().find(|d| d.field_key() == field.key);
+                    let existing_line = s.get_one_mut(&field.key);
                     match existing_line {
                         // Line exist -> in-place edit
                         Some(l) => l.set_value(&field.value)?,
@@ -125,7 +116,7 @@ impl SSHConfig {
                         _ => {
                             let new_line =
                                 Line::directive(field.key.as_canonical_str(), &field.value)?;
-                            s.push_line(new_line)?;
+                            s.push(new_line)?;
                         }
                     }
                 }
@@ -134,23 +125,21 @@ impl SSHConfig {
                 // Preserve comments and empty lines.
                 //
                 // Note: non-cumulative duplicates are kept intact by design
-                s.retain_lines(|l| match l.kind() {
-                    LineKind::Directive(d) => {
-                        host_settings.fields.iter().any(|f| f.key == d.field_key())
-                    }
+                s.retain(|l| match l.kind() {
+                    LineKind::Directive(d) => host_settings.get_one(&d.field_key()).is_some(),
                     _ => true,
                 });
             }
 
             // Whole new section
             None => {
-                let header = Selector::new(&FieldKey::Host.to_string(), &host_settings.host)?
+                let header = Selector::new(&FieldKey::Host.to_string(), host_settings.host())?
                     .with_ending(&inferred_line_ending)?;
 
                 let mut new_section = Section::new(header).with_ending(&inferred_line_ending)?;
-                for field in &host_settings.fields {
+                for field in host_settings.fields() {
                     let param = Line::directive(&field.key.to_string(), &field.value)?;
-                    new_section.push_line(param)?;
+                    new_section.push(param)?;
                 }
                 self.insert_section(0, new_section)?;
             }
@@ -185,10 +174,7 @@ impl SSHConfig {
         let section = self.sections.iter().find(|s| s.header().value() == host);
         if let Some(s) = section {
             for d in s.directives() {
-                settings.add_field(Field {
-                    key: d.field_key(),
-                    value: d.value().to_string(),
-                });
+                settings.push_dedup(d.field_key(), d.value());
             }
         }
         settings
@@ -225,7 +211,7 @@ Host my.server.local
 
         let config = SSHConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
-        assert_eq!(host_params.len(), 1);
+        assert_eq!(host_params.field_count(), 1);
 
         assert!(host_params.contains_key(&FieldKey::Hostname));
         assert_eq!(host_params.get_one(&FieldKey::Hostname).unwrap(), "1.2.3.4");
@@ -241,7 +227,7 @@ Host my.server.local
 
         let config = SSHConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
-        assert_eq!(host_params.len(), 2);
+        assert_eq!(host_params.field_count(), 2);
         assert!(host_params.contains_key(&FieldKey::Hostname));
         assert_eq!(host_params.get_one(&FieldKey::Hostname).unwrap(), "1.2.3.4");
         assert!(host_params.contains_key(&FieldKey::User));
@@ -258,7 +244,7 @@ Host my.server.local
 
         let config = SSHConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
-        assert_eq!(host_params.len(), 1);
+        assert_eq!(host_params.field_count(), 1);
         assert!(host_params.contains_key(&FieldKey::User));
         assert_eq!(host_params.get_one(&FieldKey::User).unwrap(), "first");
     }
@@ -273,7 +259,7 @@ Host my.server.local
 
         let config = SSHConfig::new(data).unwrap();
         let host_params = config.exact_host_settings("my.server.local");
-        let cumulative_params = host_params.get_multiple(&FieldKey::IdentityFile);
+        let cumulative_params: Vec<&str> = host_params.get_all(&FieldKey::IdentityFile).collect();
         assert_eq!(cumulative_params.len(), 2);
         assert_eq!(cumulative_params[0], "~/.ssh/fake_key1");
         assert_eq!(cumulative_params[1], "~/.ssh/fake_key2");
@@ -284,7 +270,7 @@ Host my.server.local
         let data = "Host a\n\tUser x\nMatch user foo\n\tPort 22\n";
         let config = SSHConfig::new(data).unwrap();
         let settings = config.exact_host_settings("a");
-        assert_eq!(settings.len(), 1);
+        assert_eq!(settings.field_count(), 1);
         assert!(!settings.contains_key(&FieldKey::Port));
     }
 
@@ -292,10 +278,7 @@ Host my.server.local
     fn set_host_settings_creates_missing_host() {
         let mut config = SSHConfig::new("Host b\n\tUser bob\n").unwrap();
         let mut new_host = HostSettings::new("a");
-        new_host.add_field(Field {
-            key: FieldKey::Hostname,
-            value: "1.2.3.4".into(),
-        });
+        new_host.push_dedup(FieldKey::Hostname, "1.2.3.4");
         config.set_host_settings(&new_host).unwrap();
 
         let a = config.exact_host_settings("a");
@@ -308,10 +291,7 @@ Host my.server.local
     fn set_host_settings_on_empty_config() {
         let mut config = SSHConfig::new("").unwrap();
         let mut new_host = HostSettings::new("a");
-        new_host.add_field(Field {
-            key: FieldKey::User,
-            value: "me".into(),
-        });
+        new_host.push_dedup(FieldKey::User, "me");
         config.set_host_settings(&new_host).unwrap();
         assert_eq!(
             config.exact_host_settings("a").get_one(&FieldKey::User),
@@ -405,10 +385,7 @@ Host my.server.local
     fn set_updates_value_in_place_preserving_formatting() {
         let mut config = SSHConfig::new("Host a\n\tPort=22\n# trailing comment\n").unwrap();
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::Port,
-            value: "2222".into(),
-        });
+        settings.push_dedup(FieldKey::Port, "2222");
         config.set_host_settings(&settings).unwrap();
 
         // '=' separator, tab indent, and the comment all survive, only the value changed
@@ -422,10 +399,9 @@ Host my.server.local
     fn set_matches_existing_key_case_insensitively() {
         let mut config = SSHConfig::new("Host a\n\thostname 1.1.1.1\n").unwrap();
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::Hostname,
-            value: "2.2.2.2".into(),
-        });
+        settings.push_dedup(FieldKey::Hostname,
+            "2.2.2.2"
+        );
         config.set_host_settings(&settings).unwrap();
 
         // lowercase spelling in the file is preserved, no canonicalization on edit
@@ -436,10 +412,7 @@ Host my.server.local
     fn set_append_key_matching_section_style() {
         let mut config = SSHConfig::new("Host a\r\n    User x\r\n").unwrap();
         let mut settings = config.exact_host_settings("a");
-        settings.add_field(Field {
-            key: FieldKey::Hostname,
-            value: "1.2.3.4".into(),
-        });
+        settings.push_dedup(FieldKey::Hostname, "1.2.3.4");
         config.set_host_settings(&settings).unwrap();
 
         // new line copies the section's 4-space indent and the file's CRLF
@@ -453,10 +426,7 @@ Host my.server.local
     fn set_creates_missing_host_with_inferred_crlf() {
         let mut config = SSHConfig::new("Host b\r\n\tUser bob\r\n").unwrap();
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::Hostname,
-            value: "1.2.3.4".into(),
-        });
+        settings.push_dedup(FieldKey::Hostname, "1.2.3.4");
         config.set_host_settings(&settings).unwrap();
 
         // inserted before existing sections, CRLF inferred, existing section untouched
@@ -470,10 +440,7 @@ Host my.server.local
     fn set_creates_host_on_empty_config_with_defaults() {
         let mut config = SSHConfig::new("").unwrap();
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::User,
-            value: "me".into(),
-        });
+        settings.push_dedup(FieldKey::User, "me");
         config.set_host_settings(&settings).unwrap();
 
         let ending = DEFAULT_LINE_ENDING;
@@ -487,10 +454,7 @@ Host my.server.local
     fn set_terminates_unterminated_preamble_before_inserting() {
         let mut config = SSHConfig::new("AddKeysToAgent yes").unwrap();
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::User,
-            value: "me".into(),
-        });
+        settings.push_dedup(FieldKey::User, "me");
         config.set_host_settings(&settings).unwrap();
 
         let ending = DEFAULT_LINE_ENDING;
@@ -508,14 +472,8 @@ Host my.server.local
         .unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::Hostname,
-            value: "1.2.3.4".into(),
-        });
-        settings.add_field(Field {
-            key: FieldKey::User,
-            value: "x".into(),
-        });
+        settings.push_dedup(FieldKey::Hostname, "1.2.3.4");
+        settings.push_dedup(FieldKey::User, "x");
         config.set_host_settings(&settings).unwrap();
 
         // ForwardAgent removed from host 'a' only, comment and untouched keys keep their bytes
@@ -532,14 +490,8 @@ Host my.server.local
                 .unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::IdentityFile,
-            value: "~/.ssh/key1".into(),
-        });
-        settings.add_field(Field {
-            key: FieldKey::IdentityFile,
-            value: "~/.ssh/keyX".into(),
-        });
+        settings.push_dedup(FieldKey::IdentityFile, "~/.ssh/key1");
+        settings.push_dedup(FieldKey::IdentityFile, "~/.ssh/keyX");
         config.set_host_settings(&settings).unwrap();
 
         // key1 line kept in place
@@ -559,10 +511,7 @@ Host my.server.local
 
         let mut settings = HostSettings::new("a");
         for v in ["A", "X", "C"] {
-            settings.add_field(Field {
-                key: FieldKey::IdentityFile,
-                value: v.into(),
-            });
+            settings.push_dedup(FieldKey::IdentityFile, v);
         }
         config.set_host_settings(&settings).unwrap();
 
@@ -581,10 +530,7 @@ Host my.server.local
         let mut config = SSHConfig::new("Host a\n\tIdentityFile A\n\tIdentityFile B\n").unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::IdentityFile,
-            value: "A".into(),
-        });
+        settings.push_dedup(FieldKey::IdentityFile, "A");
         config.set_host_settings(&settings).unwrap();
 
         assert_eq!(config.to_string(), "Host a\n\tIdentityFile A\n");
@@ -595,14 +541,8 @@ Host my.server.local
         let mut config = SSHConfig::new("Host a\n\tIdentityFile A\n").unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::IdentityFile,
-            value: "A".into(),
-        });
-        settings.add_field(Field {
-            key: FieldKey::IdentityFile,
-            value: "B".into(),
-        });
+        settings.push_dedup(FieldKey::IdentityFile, "A");
+        settings.push_dedup(FieldKey::IdentityFile, "B");
         config.set_host_settings(&settings).unwrap();
 
         assert_eq!(
@@ -617,14 +557,8 @@ Host my.server.local
         let mut config = SSHConfig::new(data).unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::IdentityFile,
-            value: "A".into(),
-        });
-        settings.add_field(Field {
-            key: FieldKey::IdentityFile,
-            value: "B".into(),
-        });
+        settings.push_dedup(FieldKey::IdentityFile, "A");
+        settings.push_dedup(FieldKey::IdentityFile, "B");
         config.set_host_settings(&settings).unwrap();
 
         assert_eq!(config.to_string(), data);
@@ -636,10 +570,7 @@ Host my.server.local
             SSHConfig::new("Host a\n\tIdentityFile A\n\tIdentityFile B\n\tUser bob\n").unwrap();
 
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::User,
-            value: "bob".into(),
-        });
+        settings.push_dedup(FieldKey::User, "bob");
         config.set_host_settings(&settings).unwrap();
 
         assert_eq!(config.to_string(), "Host a\n\tUser bob\n");
@@ -654,22 +585,10 @@ Host my.server.local
 
         // IdentityFile added first -> processed first -> to_remove pushed as [3, 2] (non-ascending)
         let mut settings = HostSettings::new("a");
-        settings.add_field(Field {
-            key: FieldKey::IdentityFile,
-            value: "k1".into(),
-        });
-        settings.add_field(Field {
-            key: FieldKey::IdentityFile,
-            value: "kX".into(),
-        });
-        settings.add_field(Field {
-            key: FieldKey::SetEnv,
-            value: "A=1".into(),
-        });
-        settings.add_field(Field {
-            key: FieldKey::SetEnv,
-            value: "B=9".into(),
-        });
+        settings.push_dedup(FieldKey::IdentityFile, "k1");
+        settings.push_dedup(FieldKey::IdentityFile, "kX");
+        settings.push_dedup(FieldKey::SetEnv, "A=1");
+        settings.push_dedup(FieldKey::SetEnv, "B=9");
         config.set_host_settings(&settings).unwrap();
 
         assert_eq!(
