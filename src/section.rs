@@ -130,7 +130,7 @@ impl Section {
     }
 
     /// Append `line` and add a line terminator to the previous header/line if none is set.
-    pub fn append(&mut self, mut line: Line) -> Result<()> {
+    pub fn push(&mut self, mut line: Line) -> Result<()> {
         valid_newline(&line)?;
         let line_ending = self.infer_line_ending();
         let line_indent = self.infer_line_indent();
@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn push_line_terminates_unterminated_header() {
         let mut s = section_from("Host a");
-        s.append(field_line("User", "x")).unwrap();
+        s.push(field_line("User", "x")).unwrap();
 
         let ending = DEFAULT_LINE_ENDING;
         assert_eq!(s.to_string(), format!("Host a{ending}\tUser x{ending}",));
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn push_line_terminates_unterminated_last_body_line() {
         let mut s = section_from("Host a\n\tUser x");
-        s.append(field_line("Hostname", "1.2.3.4")).unwrap();
+        s.push(field_line("Hostname", "1.2.3.4")).unwrap();
         assert_eq!(s.to_string(), "Host a\n\tUser x\n\tHostname 1.2.3.4\n");
     }
 }
