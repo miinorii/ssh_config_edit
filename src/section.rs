@@ -110,12 +110,12 @@ impl Section {
     }
 
     /// Returns the first directive matching `key`.
-    pub fn get(&self, key: &FieldKey) -> Option<&Directive> {
+    pub fn get_one(&self, key: &FieldKey) -> Option<&Directive> {
         self.directives().find(|d| d.field_key() == *key)
     }
 
     /// Returns the first directive matching `key` with mutability.
-    pub fn get_mut(&mut self, key: &FieldKey) -> Option<&mut Directive> {
+    pub fn get_one_mut(&mut self, key: &FieldKey) -> Option<&mut Directive> {
         self.directives_mut().find(|d| d.field_key() == *key)
     }
 
@@ -130,7 +130,7 @@ impl Section {
     }
 
     /// Append `line` and add a line terminator to the previous header/line if none is set.
-    pub fn push_line(&mut self, mut line: Line) -> Result<()> {
+    pub fn append(&mut self, mut line: Line) -> Result<()> {
         valid_newline(&line)?;
         let line_ending = self.infer_line_ending();
         let line_indent = self.infer_line_indent();
@@ -147,7 +147,7 @@ impl Section {
     /// Insert `line` at `index` and add a line terminator to the previous header/line if none is set.
     /// # Panics
     /// Panics if `index > self.lines.count()`.
-    pub fn insert_line(&mut self, index: usize, mut line: Line) -> Result<()> {
+    pub fn insert(&mut self, index: usize, mut line: Line) -> Result<()> {
         valid_newline(&line)?;
         let line_ending = self.infer_line_ending();
         let line_indent = self.infer_line_indent();
@@ -164,7 +164,7 @@ impl Section {
     /// Remove `Line` at `index`.
     /// # Panics
     /// Panics if `index` is out of bounds.
-    pub fn remove_line(&mut self, index: usize) -> Line {
+    pub fn remove(&mut self, index: usize) -> Line {
         self.body.remove(index)
     }
 
@@ -172,7 +172,7 @@ impl Section {
     ///
     /// In other words, remove all elements `e` for which `f(&e)` returns false.
     /// This method operates in place, visiting each element exactly once in the original order, and preserves the order of the retained elements.
-    pub fn retain_lines(&mut self, f: impl FnMut(&Line) -> bool) {
+    pub fn retain(&mut self, f: impl FnMut(&Line) -> bool) {
         self.body.retain(f);
     }
 
@@ -306,7 +306,7 @@ mod tests {
     #[test]
     fn push_line_terminates_unterminated_header() {
         let mut s = section_from("Host a");
-        s.push_line(field_line("User", "x")).unwrap();
+        s.append(field_line("User", "x")).unwrap();
 
         let ending = DEFAULT_LINE_ENDING;
         assert_eq!(s.to_string(), format!("Host a{ending}\tUser x{ending}",));
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn push_line_terminates_unterminated_last_body_line() {
         let mut s = section_from("Host a\n\tUser x");
-        s.push_line(field_line("Hostname", "1.2.3.4")).unwrap();
+        s.append(field_line("Hostname", "1.2.3.4")).unwrap();
         assert_eq!(s.to_string(), "Host a\n\tUser x\n\tHostname 1.2.3.4\n");
     }
 }
