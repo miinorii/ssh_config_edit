@@ -43,6 +43,7 @@ pub enum Error {
     InvalidValue(String),
     NotASelector(String),
     UnexpectedSelector(String),
+    NotCumulative(String),
     EmptyKey,
     EmptyValue,
 }
@@ -58,7 +59,10 @@ impl fmt::Display for Error {
             Error::InvalidKey(s) => write!(f, "invalid key: {s:?}"),
             Error::InvalidValue(s) => write!(f, "invalid value: {s:?}"),
             Error::NotASelector(s) => write!(f, "invalid key, not a selector: {s:?}"),
-            Error::UnexpectedSelector(s) => write!(f, "invalid line, unexpected selector: {s:?}"),
+            Error::UnexpectedSelector(s) => write!(f, "unexpected selector: {s:?}"),
+            Error::NotCumulative(s) => {
+                write!(f, "FieldKey already exist and is not cumulative: {s:?}")
+            }
             Error::EmptyKey => write!(f, "empty key"),
             Error::EmptyValue => write!(f, "empty value"),
         }
