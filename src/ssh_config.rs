@@ -98,6 +98,14 @@ impl SSHConfig {
         self.sections.remove(index)
     }
 
+    /// Append `section` to the end of the document.
+    ///
+    /// Terminates the preceding section or preamble line when it has no line
+    /// ending of its own.
+    pub fn push_section(&mut self, section: Section) {
+        self.insert_section(self.sections.len(), section);
+    }
+
     /// Remove and return the first [`Section`] whose header value is exactly
     /// `pattern`, or `None` if no section matches.
     ///
