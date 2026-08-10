@@ -1,11 +1,13 @@
 use crate::error::{Error, ParseErrorKind, Result};
+use crate::decor::LineEnding;
 use std::str::CharIndices;
 use std::{fmt, iter::Peekable};
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LexItem {
     Indent(String),
-    Ending(String),
+    Ending(LineEnding),
     Comment(String),
     Directive {
         key: String,
@@ -22,7 +24,7 @@ impl LexItem {
         }
     }
 
-    pub(crate) fn into_ending(self) -> Option<String> {
+    pub(crate) fn into_ending(self) -> Option<LineEnding> {
         match self {
             LexItem::Ending(s) => Some(s),
             _ => None,
@@ -101,20 +103,20 @@ impl<'a> Lexer<'a> {
     fn handle_ending(&mut self) -> Result<LexItem> {
         match self.iter.next() {
             // handle single LF newline
-            Some((offset, '\n')) => {
+            Some((_, '\n')) => {
                 self.line += 1;
                 self.col = 1;
-                Ok(LexItem::Ending(self.data[offset..offset + 1].to_string()))
+                Ok(LexItem::Ending(LineEnding::Lf))
             }
 
             // handle CRLF and improper format
-            Some((offset, '\r')) => {
+            Some((_, '\r')) => {
                 self.col += 1;
                 match self.iter.next() {
                     Some((_, '\n')) => {
                         self.line += 1;
                         self.col = 1;
-                        Ok(LexItem::Ending(self.data[offset..offset + 2].to_string()))
+                        Ok(LexItem::Ending(LineEnding::Crlf))
                     }
                     Some((_, _)) | None => Err(Error::Parse {
                         line: self.line,
@@ -313,19 +315,19 @@ mod tests {
 
     #[test]
     fn parse_line_ending_lf() {
-        assert_eq!(lex("\n"), vec![LexItem::Ending("\n".into())]);
+        assert_eq!(lex("\n"), vec![LexItem::Ending(LineEnding::Lf)]);
     }
 
     #[test]
     fn parse_line_ending_crlf() {
-        assert_eq!(lex("\r\n"), vec![LexItem::Ending("\r\n".into())]);
+        assert_eq!(lex("\r\n"), vec![LexItem::Ending(LineEnding::Crlf)]);
     }
 
     #[test]
     fn parse_line_ending_crlflf() {
         assert_eq!(
             lex("\r\n\n"),
-            vec![LexItem::Ending("\r\n".into()), LexItem::Ending("\n".into()),]
+            vec![LexItem::Ending(LineEnding::Crlf), LexItem::Ending(LineEnding::Lf),]
         );
     }
 
@@ -335,7 +337,7 @@ mod tests {
             lex("  \nHost x"),
             vec![
                 LexItem::Indent("  ".into()),
-                LexItem::Ending("\n".into()),
+                LexItem::Ending(LineEnding::Lf),
                 LexItem::Directive {
                     key: "Host".into(),
                     sep: " ".into(),
