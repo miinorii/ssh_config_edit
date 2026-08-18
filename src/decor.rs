@@ -20,6 +20,7 @@ impl fmt::Display for LineEnding {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Indent(String);
 
 impl Indent {
