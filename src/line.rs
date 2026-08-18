@@ -14,16 +14,6 @@ fn validate_sep(sep: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_key(key: &str) -> Result<()> {
-    if key.chars().all(char::is_whitespace) {
-        return Err(Error::EmptyKey);
-    }
-
-    if key.contains(['\n', '\r']) {
-        return Err(Error::InvalidKey(key.into()));
-    }
-    Ok(())
-}
 
 fn validate_value(value: &str) -> Result<()> {
     if value.chars().all(char::is_whitespace) {
@@ -54,24 +44,19 @@ impl Directive {
     /// Host local
     ///     Port 12345 <- Port Directive
     /// ```
-    pub fn new(key: &str, value: &str) -> Result<Self> {
-        validate_key(key)?;
+    pub fn new(key: FieldKey, value: &str) -> Result<Self> {
         validate_value(value)?;
 
         Ok(Self {
-            key: key.into(),
+            key: key.as_canonical_str().to_string(),
             sep: " ".into(),
             value: value.into(),
         })
     }
 
     /// Construct a new [`Directive`] by consuming a given `key`, `sep` and `value`.
-    pub(crate) fn from_parts(key: String, sep: String, value: String) -> Result<Self> {
-        validate_key(&key)?;
-        validate_sep(&sep)?;
-        validate_value(&value)?;
-
-        Ok(Self { key, sep, value })
+    pub(crate) fn from_parts(key: String, sep: String, value: String) -> Self {
+        Self { key, sep, value }
     }
 
     pub fn key(&self) -> &str {
@@ -142,15 +127,14 @@ impl Selector {
     /// Match user git <- Match selector
     ///     Port 12345
     /// ```
-    pub fn new(key: &str, value: &str) -> Result<Self> {
-        FieldKey::parse(key)
-            .as_selector_kind()
-            .ok_or_else(|| Error::NotASelector(key.into()))?;
+    pub fn new(key: FieldKey, value: &str) -> Result<Self> {
+        key.as_selector_kind()
+            .ok_or_else(|| Error::NotASelector(key.as_canonical_str().to_string()))?;
         validate_value(value)?;
 
         Ok(Self {
             decor: Decor::default(),
-            key: key.into(),
+            key: key.as_canonical_str().to_string(),
             sep: " ".into(),
             value: value.into(),
         })
@@ -287,7 +271,7 @@ impl Line {
     /// Host local
     ///     Port 12345 <- Port Directive
     /// ```
-    pub fn directive(key: &str, value: &str) -> Result<Line> {
+    pub fn directive(key: FieldKey, value: &str) -> Result<Line> {
         Ok(Line::from(Directive::new(key, value)?))
     }
 
@@ -339,13 +323,13 @@ impl Line {
     }
 
     /// Parse multiple [`Line`] from a `Vec<LexItem>`.
-    pub(crate) fn parse_lines(items: Vec<LexItem>) -> Result<Vec<Self>> {
+    pub(crate) fn parse_lines(items: Vec<LexItem>) -> Vec<Self> {
         let mut iter = items.into_iter().peekable();
         let mut lines: Vec<Self> = Vec::new();
         while iter.peek().is_some() {
-            lines.push(Self::parse_line(&mut iter)?);
+            lines.push(Self::parse_line(&mut iter));
         }
-        Ok(lines)
+        lines
     }
 
     /// Parse the next line from the LexItem stream.
@@ -357,7 +341,7 @@ impl Line {
     /// - `[Indent], [Ending]`
     ///
     /// Optional token are denoted with `[]`
-    fn parse_line(iter: &mut Peekable<vec::IntoIter<LexItem>>) -> Result<Line> {
+    fn parse_line(iter: &mut Peekable<vec::IntoIter<LexItem>>) -> Line {
         let indent = iter
             .next_if(|i| matches!(i, LexItem::Indent(_)))
             .and_then(LexItem::into_indent);
@@ -366,7 +350,7 @@ impl Line {
         let kind = match iter.next_if(|i| !matches!(i, LexItem::Ending(_))) {
             Some(LexItem::Comment(text)) => LineKind::Comment(text),
             Some(LexItem::Directive { key, sep, value }) => {
-                LineKind::Directive(Directive::from_parts(key, sep, value)?)
+                LineKind::Directive(Directive::from_parts(key, sep, value))
             }
             Some(LexItem::Indent(_)) => unreachable!("indent already checked"),
             Some(LexItem::Ending(_)) => unreachable!("excluded by next_if"),
@@ -384,7 +368,7 @@ impl Line {
         if let Some(indent) = indent {
             decor.set_indent(Indent::from_lexer(indent));
         }
-        Ok(Line { decor: decor, kind })
+        Line { decor: decor, kind }
     }
 
     pub fn indent(&self) -> Option<&Indent> {
@@ -483,7 +467,7 @@ mod tests {
     use crate::lexer::Lexer;
 
     fn roundtrip(data: &str) -> String {
-        let lines = Line::parse_lines(Lexer::new(data).tokenize().unwrap()).unwrap();
+        let lines = Line::parse_lines(Lexer::new(data).tokenize().unwrap());
         lines.iter().map(|l| l.to_string()).collect()
     }
 
@@ -522,7 +506,7 @@ mod tests {
     // --- Line tests ---
 
     fn sample_directive() -> Directive {
-        Directive::new("User", "x").unwrap()
+        Directive::new(FieldKey::User, "x").unwrap()
     }
 
     #[test]
