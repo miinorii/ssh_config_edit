@@ -2,8 +2,9 @@ use crate::error::Result;
 use crate::field_keys::FieldKey;
 use crate::lexer::Lexer;
 use crate::line::{Line, LineKind, Selector};
-use crate::section::{DEFAULT_LINE_ENDING, Section};
+use crate::section::Section;
 use crate::settings::{Field, HostSettings};
+use crate::decor::LineEnding;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -78,12 +79,10 @@ impl SSHConfig {
         if index == self.sections.len() {
             let ending = self.infer_line_ending();
             if let Some(prev) = self.sections.last_mut() {
-                prev.terminate(&ending)
-                    .expect("line ending should always be valid here");
+                prev.terminate(ending);
             } else if let Some(last_line) = self.preamble.last_mut() {
                 last_line
-                    .set_ending_if_absent(&ending)
-                    .expect("line ending should always be valid here");
+                    .set_ending_if_absent(ending);
             }
         }
 
@@ -121,12 +120,12 @@ impl SSHConfig {
     /// Infer line ending from the preamble and every [`Section`] header.
     ///
     /// Default to system default if no line ending is found.
-    fn infer_line_ending(&self) -> String {
+    fn infer_line_ending(&self) -> LineEnding {
         self.preamble
             .iter()
             .find_map(Line::ending)
             .or_else(|| self.sections.iter().find_map(Section::ending))
-            .map_or_else(|| DEFAULT_LINE_ENDING.to_string(), |t| t.to_string())
+            .unwrap_or_default()
     }
 
     /// Reconcile `host_settings` back into the document.
@@ -233,9 +232,9 @@ impl SSHConfig {
             None => {
                 let header =
                     Selector::new(FieldKey::Host.as_canonical_str(), host_settings.host())?
-                        .with_ending(&inferred_line_ending)?;
+                        .with_ending(inferred_line_ending);
 
-                let mut new_section = Section::new(header).with_ending(&inferred_line_ending)?;
+                let mut new_section = Section::new(header).with_ending(inferred_line_ending);
                 for field in host_settings.fields() {
                     let param = Line::directive(field.key.as_canonical_str(), &field.value)?;
                     new_section.push(param)?;
@@ -448,13 +447,13 @@ Host my.server.local
     #[test]
     fn infer_line_ending_lf() {
         let config = SSHConfig::parse("Host a\n\tUser x\n").unwrap();
-        assert_eq!(config.infer_line_ending(), "\n");
+        assert_eq!(config.infer_line_ending().as_str(), "\n");
     }
 
     #[test]
     fn infer_line_ending_crlf() {
         let config = SSHConfig::parse("Host a\r\n\tUser x\r\n").unwrap();
-        assert_eq!(config.infer_line_ending(), "\r\n");
+        assert_eq!(config.infer_line_ending().as_str(), "\r\n");
     }
 
     #[test]
@@ -462,26 +461,26 @@ Host my.server.local
         // guards the Line::ending widening: no directives anywhere, ending
         // must still be found on a Comment line
         let config = SSHConfig::parse("# managed by hand\r\n").unwrap();
-        assert_eq!(config.infer_line_ending(), "\r\n");
+        assert_eq!(config.infer_line_ending().as_str(), "\r\n");
     }
 
     #[test]
     fn infer_line_ending_uses_document_order() {
         // preamble says LF, section says CRLF: first ending in the file wins
         let config = SSHConfig::parse("AddKeysToAgent yes\nHost a\r\n\tUser x\r\n").unwrap();
-        assert_eq!(config.infer_line_ending(), "\n");
+        assert_eq!(config.infer_line_ending().as_str(), "\n");
     }
 
     #[test]
     fn infer_line_ending_defaults_on_empty_config() {
         let config = SSHConfig::parse("").unwrap();
-        assert_eq!(config.infer_line_ending(), DEFAULT_LINE_ENDING);
+        assert_eq!(config.infer_line_ending(), LineEnding::default());
     }
 
     #[test]
     fn infer_line_ending_defaults_when_file_has_no_ending() {
         let config = SSHConfig::parse("Host a").unwrap(); // single unterminated line
-        assert_eq!(config.infer_line_ending(), DEFAULT_LINE_ENDING);
+        assert_eq!(config.infer_line_ending(), LineEnding::default());
     }
 
     // --- host settings update ---
@@ -546,7 +545,7 @@ Host my.server.local
         settings.push_dedup(FieldKey::User, "me");
         config.set_host_settings(&settings).unwrap();
 
-        let ending = DEFAULT_LINE_ENDING;
+        let ending = LineEnding::default();
         assert_eq!(
             config.to_string(),
             format!("Host a{ending}\tUser me{ending}")
@@ -560,7 +559,7 @@ Host my.server.local
         settings.push_dedup(FieldKey::User, "me");
         config.set_host_settings(&settings).unwrap();
 
-        let ending = DEFAULT_LINE_ENDING;
+        let ending = LineEnding::default();
         assert_eq!(
             config.to_string(),
             format!("AddKeysToAgent yes{ending}Host a{ending}\tUser me{ending}")
