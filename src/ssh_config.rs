@@ -1,10 +1,10 @@
+use crate::decor::LineEnding;
 use crate::error::Result;
 use crate::field_keys::FieldKey;
 use crate::lexer::Lexer;
 use crate::line::{Line, LineKind, Selector};
 use crate::section::Section;
 use crate::settings::{Field, HostSettings};
-use crate::decor::LineEnding;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -81,8 +81,7 @@ impl SSHConfig {
             if let Some(prev) = self.sections.last_mut() {
                 prev.terminate(ending);
             } else if let Some(last_line) = self.preamble.last_mut() {
-                last_line
-                    .set_ending_if_absent(ending);
+                last_line.set_ending_if_absent(ending);
             }
         }
 

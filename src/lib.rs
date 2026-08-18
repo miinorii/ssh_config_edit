@@ -72,10 +72,10 @@ mod section;
 mod settings;
 mod ssh_config;
 
+pub use decor::{Indent, LineEnding};
 pub use error::{Error, ParseErrorKind, Result};
 pub use field_keys::{FieldKey, SelectorKind};
 pub use line::{Directive, Line, LineKind, Selector};
-pub use decor::{LineEnding, Indent};
 pub use section::Section;
 pub use settings::{Field, HostSettings};
 pub use ssh_config::SSHConfig;

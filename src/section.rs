@@ -1,9 +1,8 @@
+use crate::decor::{Decor, Indent, LineEnding};
 use crate::error::{Error, Result};
 use crate::field_keys::FieldKey;
 use crate::line::{Directive, Line, LineKind, Selector};
-use crate::decor::{Decor, Indent, LineEnding};
 use std::fmt;
-
 
 fn valid_newline(line: &Line) -> Result<()> {
     match line.kind() {
@@ -215,11 +214,16 @@ impl Section {
     }
 
     pub(crate) fn infer_line_ending(&self) -> LineEnding {
-        self.ending().or_else(|| self.default_decor.ending()).unwrap_or_default()
+        self.ending()
+            .or_else(|| self.default_decor.ending())
+            .unwrap_or_default()
     }
 
     pub(crate) fn infer_line_indent(&self) -> Indent {
-        self.indent().or_else(|| self.default_decor.indent()).cloned().unwrap_or_default()
+        self.indent()
+            .or_else(|| self.default_decor.indent())
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub(crate) fn terminate(&mut self, ending: LineEnding) {
