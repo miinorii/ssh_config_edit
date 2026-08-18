@@ -173,7 +173,7 @@ impl Selector {
         self
     }
 
-    pub fn ending(&self) -> Option<&LineEnding> {
+    pub fn ending(&self) -> Option<LineEnding> {
         self.decor.ending()
     }
 
@@ -404,7 +404,7 @@ impl Line {
         self
     }
 
-    pub fn ending(&self) -> Option<&LineEnding> {
+    pub fn ending(&self) -> Option<LineEnding> {
         self.decor.ending()
     }
 

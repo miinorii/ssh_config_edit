@@ -97,8 +97,8 @@ impl Decor {
         Ok(())
     }
 
-    pub(crate) fn ending(&self) -> Option<&LineEnding> {
-        self.ending.as_ref()
+    pub(crate) fn ending(&self) -> Option<LineEnding> {
+        self.ending
     }
 
     pub(crate) fn set_ending(&mut self, ending: LineEnding) {
