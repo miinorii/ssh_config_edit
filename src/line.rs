@@ -1,11 +1,8 @@
+use crate::decor::{Decor, Indent, LineEnding, is_inline_ws};
 use crate::error::{Error, Result};
 use crate::field_keys::{FieldKey, SelectorKind};
 use crate::lexer::LexItem;
 use std::{fmt, iter::Peekable, vec};
-
-fn is_inline_ws(c: char) -> bool {
-    c.is_whitespace() && c != '\n' && c != '\r'
-}
 
 fn validate_sep(sep: &str) -> Result<()> {
     if sep.chars().any(|c| !is_inline_ws(c) && c != '=')
@@ -37,70 +34,6 @@ fn validate_value(value: &str) -> Result<()> {
         return Err(Error::InvalidValue(value.into()));
     }
     Ok(())
-}
-
-#[derive(Default)]
-pub(crate) struct Decor {
-    indent: Option<String>,
-    ending: Option<String>,
-}
-
-impl Decor {
-    pub(crate) fn indent(&self) -> Option<&str> {
-        self.indent.as_deref()
-    }
-
-    pub(crate) fn set_indent(&mut self, indent: &str) -> Result<()> {
-        if indent.chars().any(|c| !is_inline_ws(c)) || indent.is_empty() {
-            return Err(Error::InvalidIndent(indent.into()));
-        }
-        self.indent = Some(indent.into());
-        Ok(())
-    }
-
-    pub(crate) fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
-        if self.indent.is_none() {
-            self.set_indent(indent)?;
-        }
-        Ok(())
-    }
-
-    pub(crate) fn with_indent(mut self, indent: &str) -> Result<Self> {
-        self.set_indent(indent)?;
-        Ok(self)
-    }
-
-    pub(crate) fn write_indent(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.indent().unwrap_or(""))
-    }
-
-    pub(crate) fn ending(&self) -> Option<&str> {
-        self.ending.as_deref()
-    }
-
-    pub(crate) fn set_ending(&mut self, ending: &str) -> Result<()> {
-        if ending != "\n" && ending != "\r\n" {
-            return Err(Error::InvalidLineEnding(ending.into()));
-        }
-        self.ending = Some(ending.into());
-        Ok(())
-    }
-
-    pub(crate) fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
-        if self.ending.is_none() {
-            self.set_ending(ending)?;
-        }
-        Ok(())
-    }
-
-    pub(crate) fn with_ending(mut self, ending: &str) -> Result<Self> {
-        self.set_ending(ending)?;
-        Ok(self)
-    }
-
-    pub(crate) fn write_ending(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.ending().unwrap_or(""))
-    }
 }
 
 #[derive(PartialEq)]
@@ -223,38 +156,38 @@ impl Selector {
         })
     }
 
-    pub fn indent(&self) -> Option<&str> {
+    pub fn indent(&self) -> Option<&Indent> {
         self.decor.indent()
     }
 
-    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
+    pub fn set_indent(&mut self, indent: Indent) {
         self.decor.set_indent(indent)
     }
 
-    pub fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
+    pub fn set_indent_if_absent(&mut self, indent: Indent) {
         self.decor.set_indent_if_absent(indent)
     }
 
-    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
-        self.decor.set_indent(indent)?;
-        Ok(self)
+    pub fn with_indent(mut self, indent: Indent) -> Self {
+        self.decor.set_indent(indent);
+        self
     }
 
-    pub fn ending(&self) -> Option<&str> {
+    pub fn ending(&self) -> Option<&LineEnding> {
         self.decor.ending()
     }
 
-    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
-        self.decor.set_ending(ending)
+    pub fn set_ending(&mut self, ending: LineEnding) {
+        self.decor.set_ending(ending);
     }
 
-    pub fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
-        self.decor.set_ending_if_absent(ending)
+    pub fn set_ending_if_absent(&mut self, ending: LineEnding) {
+        self.decor.set_ending_if_absent(ending);
     }
 
-    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
-        self.decor.set_ending(ending)?;
-        Ok(self)
+    pub fn with_ending(mut self, ending: LineEnding) -> Self {
+        self.decor.set_ending(ending);
+        self
     }
 
     pub fn key(&self) -> &str {
@@ -444,44 +377,48 @@ impl Line {
             .next_if(|i| matches!(i, LexItem::Ending(_)))
             .and_then(LexItem::into_ending);
 
-        Ok(Line {
-            decor: Decor { indent, ending },
-            kind,
-        })
+        let mut decor = Decor::new();
+        if let Some(ending) = ending {
+            decor.set_ending(ending);
+        }
+        if let Some(indent) = indent {
+            decor.set_indent(Indent::from_lexer(indent));
+        }
+        Ok(Line { decor: decor, kind })
     }
 
-    pub fn indent(&self) -> Option<&str> {
+    pub fn indent(&self) -> Option<&Indent> {
         self.decor.indent()
     }
 
-    pub fn set_indent(&mut self, indent: &str) -> Result<()> {
+    pub fn set_indent(&mut self, indent: Indent) {
         self.decor.set_indent(indent)
     }
 
-    pub fn set_indent_if_absent(&mut self, indent: &str) -> Result<()> {
+    pub fn set_indent_if_absent(&mut self, indent: Indent) {
         self.decor.set_indent_if_absent(indent)
     }
 
-    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
-        self.decor.set_indent(indent)?;
-        Ok(self)
+    pub fn with_indent(mut self, indent: Indent) -> Self {
+        self.decor.set_indent(indent);
+        self
     }
 
-    pub fn ending(&self) -> Option<&str> {
+    pub fn ending(&self) -> Option<&LineEnding> {
         self.decor.ending()
     }
 
-    pub fn set_ending(&mut self, ending: &str) -> Result<()> {
-        self.decor.set_ending(ending)
+    pub fn set_ending(&mut self, ending: LineEnding) {
+        self.decor.set_ending(ending);
     }
 
-    pub fn set_ending_if_absent(&mut self, ending: &str) -> Result<()> {
-        self.decor.set_ending_if_absent(ending)
+    pub fn set_ending_if_absent(&mut self, ending: LineEnding) {
+        self.decor.set_ending_if_absent(ending);
     }
 
-    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
-        self.decor.set_ending(ending)?;
-        Ok(self)
+    pub fn with_ending(mut self, ending: LineEnding) -> Self {
+        self.decor.set_ending(ending);
+        self
     }
 
     pub fn kind(&self) -> &LineKind {
@@ -593,22 +530,6 @@ mod tests {
             decor: Decor::default(),
             kind: LineKind::Directive(sample_directive()),
         }
-    }
-
-    #[test]
-    fn with_ending_rejects_garbage() {
-        assert!(sample_line().with_ending("\r").is_err());
-        assert!(sample_line().with_ending(" \n").is_err());
-    }
-
-    #[test]
-    fn with_indent_rejects_newline() {
-        assert!(sample_line().with_indent("\n").is_err());
-    }
-
-    #[test]
-    fn with_indent_accepts_blank_chars() {
-        assert!(sample_line().with_indent("\t  ").is_ok());
     }
 
     #[test]
