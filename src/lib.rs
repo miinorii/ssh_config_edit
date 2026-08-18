@@ -64,6 +64,7 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 
 mod error;
+mod decor;
 mod field_keys;
 mod lexer;
 mod line;
