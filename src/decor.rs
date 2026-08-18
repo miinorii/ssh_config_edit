@@ -1,6 +1,5 @@
-use std::fmt;
 use crate::error::{Error, Result};
-
+use std::fmt;
 
 pub const DEFAULT_LINE_INDENT: &str = "\t";
 
@@ -9,15 +8,14 @@ pub enum LineEnding {
     #[cfg_attr(not(target_os = "windows"), default)]
     Lf,
     #[cfg_attr(target_os = "windows", default)]
-    Crlf
+    Crlf,
 }
-
 
 impl fmt::Display for LineEnding {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             LineEnding::Lf => write!(f, "\n"),
-            LineEnding::Crlf => write!(f, "\r\n")
+            LineEnding::Crlf => write!(f, "\r\n"),
         }
     }
 }
@@ -61,7 +59,7 @@ impl Decor {
     pub(crate) fn new() -> Self {
         Self {
             indent: None,
-            ending: None
+            ending: None,
         }
     }
 
@@ -120,4 +118,19 @@ impl Decor {
 
 pub(crate) fn is_inline_ws(c: char) -> bool {
     c.is_whitespace() && c != '\n' && c != '\r'
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn indent_rejects_newline() {
+        assert!(Indent::new("\n").is_err());
+    }
+
+    #[test]
+    fn indent_accepts_blank_chars() {
+        assert!(Indent::new("\t  ").is_ok());
+    }
 }
