@@ -3,7 +3,7 @@ use std::fmt;
 
 pub const DEFAULT_LINE_INDENT: &str = "\t";
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, Copy)]
 pub enum LineEnding {
     #[cfg_attr(not(target_os = "windows"), default)]
     Lf,
