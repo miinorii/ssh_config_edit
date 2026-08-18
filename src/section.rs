@@ -249,7 +249,6 @@ mod tests {
         sections.remove(0)
     }
 
-
     #[test]
     fn preamble_collects_lines_before_first_section() {
         let (preamble, sections) = parse("# c\nAddKeysToAgent yes\n\nHost a\n\tUser x\n");

@@ -14,7 +14,6 @@ fn validate_sep(sep: &str) -> Result<()> {
     Ok(())
 }
 
-
 fn validate_value(value: &str) -> Result<()> {
     if value.chars().all(char::is_whitespace) {
         return Err(Error::EmptyValue);

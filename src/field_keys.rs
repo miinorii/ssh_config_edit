@@ -7,10 +7,9 @@
 //!
 //! Disclaimer: due to the sheer number of parameters, file generation was automated using AI.
 
+use crate::error::{Error, Result};
 use std::fmt;
 use std::str::FromStr;
-use crate::error::{Error, Result};
-
 
 fn validate_key_str(s: &str) -> Result<()> {
     if s.is_empty() || s.chars().any(|c| c.is_whitespace() || c == '=') {
