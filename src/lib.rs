@@ -26,7 +26,7 @@
 //! [`SSHConfig`], [`Section`] and [`Line`].
 //!
 //! ```rust
-//! use ssh_config_edit::{FieldKey, Line, SSHConfig, Section, Selector};
+//! use ssh_config_edit::{FieldKey, Line, SSHConfig, Section, Selector, LineEnding, Indent};
 //!
 //! # fn main() -> Result<(), ssh_config_edit::Error> {
 //! let mut config = SSHConfig::parse("# managed\nHost dev\n    Port=22\n")?;
@@ -45,8 +45,8 @@
 //!
 //! // build a whole new section and append it
 //! let mut prod = Section::new(Selector::new("Host", "prod")?)
-//!     .with_indent("    ")?
-//!     .with_ending("\n")?;
+//!     .with_indent(Indent::new("    ")?)
+//!     .with_ending(LineEnding::Lf);
 //! prod.push(Line::directive("HostName", "10.0.0.1")?)?;
 //! prod.push(Line::comment("gateway")?)?;
 //! prod.push(Line::blank())?;
@@ -75,6 +75,7 @@ mod ssh_config;
 pub use error::{Error, ParseErrorKind, Result};
 pub use field_keys::{FieldKey, SelectorKind};
 pub use line::{Directive, Line, LineKind, Selector};
+pub use decor::{LineEnding, Indent};
 pub use section::Section;
 pub use settings::{Field, HostSettings};
 pub use ssh_config::SSHConfig;
