@@ -1,8 +1,6 @@
 use crate::error::{Error, Result};
 use std::fmt;
 
-pub const DEFAULT_LINE_INDENT: &str = "\t";
-
 #[derive(Debug, Clone, PartialEq, Default, Copy)]
 pub enum LineEnding {
     #[cfg_attr(not(target_os = "windows"), default)]
@@ -41,6 +39,12 @@ impl Indent {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl Default for Indent {
+    fn default() -> Self {
+        Self("\t".into())
     }
 }
 
