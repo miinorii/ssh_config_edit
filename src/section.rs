@@ -1,15 +1,9 @@
 use crate::error::{Error, Result};
 use crate::field_keys::FieldKey;
-use crate::line::{Decor, Directive, Line, LineKind, Selector};
+use crate::line::{Directive, Line, LineKind, Selector};
+use crate::decor::{Decor, Indent, LineEnding};
 use std::fmt;
 
-#[cfg(target_os = "windows")]
-pub const DEFAULT_LINE_ENDING: &str = "\r\n";
-
-#[cfg(not(target_os = "windows"))]
-pub const DEFAULT_LINE_ENDING: &str = "\n";
-
-pub const DEFAULT_LINE_INDENT: &str = "\t";
 
 fn valid_newline(line: &Line) -> Result<()> {
     match line.kind() {
@@ -38,11 +32,7 @@ impl fmt::Display for Section {
 
 impl Section {
     pub fn new(header: Selector) -> Self {
-        let decor = Decor::default()
-            .with_indent(DEFAULT_LINE_INDENT.into())
-            .expect("default line indent can't fail")
-            .with_ending(DEFAULT_LINE_ENDING.into())
-            .expect("default line ending can't fail");
+        let decor = Decor::default();
 
         Self {
             header,
@@ -55,28 +45,28 @@ impl Section {
     ///
     /// The default is a fallback used only when the section has
     /// no line to infer from, it never rewrites existing lines.
-    pub fn set_default_indent(&mut self, indent: &str) -> Result<()> {
+    pub fn set_default_indent(&mut self, indent: Indent) {
         self.default_decor.set_indent(indent)
     }
 
     /// Returns `Self` with the default indent set to `indent`.
-    pub fn with_indent(mut self, indent: &str) -> Result<Self> {
-        self.set_default_indent(indent)?;
-        Ok(self)
+    pub fn with_indent(mut self, indent: Indent) -> Self {
+        self.set_default_indent(indent);
+        self
     }
 
     /// Set default ending.
     ///
     /// The default is a fallback used only when the section has
     /// no line to infer from, it never rewrites existing lines.
-    pub fn set_default_ending(&mut self, ending: &str) -> Result<()> {
+    pub fn set_default_ending(&mut self, ending: LineEnding) {
         self.default_decor.set_ending(ending)
     }
 
     /// Returns `Self` with the default ending set to `ending`.
-    pub fn with_ending(mut self, ending: &str) -> Result<Self> {
-        self.set_default_ending(ending)?;
-        Ok(self)
+    pub fn with_ending(mut self, ending: LineEnding) -> Self {
+        self.set_default_ending(ending);
+        self
     }
 
     /// Returns the current header as a [`Selector`].
@@ -142,13 +132,13 @@ impl Section {
         let line_ending = self.infer_line_ending();
         let line_indent = self.infer_line_indent();
 
-        self.terminate(&line_ending)?;
+        self.terminate(line_ending);
 
         // avoid useless indent on newly created blank lines
         if !line.is_blank() {
-            line.set_indent_if_absent(&line_indent)?;
+            line.set_indent_if_absent(line_indent);
         }
-        line.set_ending_if_absent(&line_ending)?;
+        line.set_ending_if_absent(line_ending);
 
         self.body.insert(index, line);
         Ok(())
@@ -188,13 +178,13 @@ impl Section {
         self.body.len()
     }
 
-    pub fn indent(&self) -> Option<&str> {
+    pub fn indent(&self) -> Option<&Indent> {
         self.header
             .indent()
             .or_else(|| self.body.iter().find_map(Line::indent))
     }
 
-    pub fn ending(&self) -> Option<&str> {
+    pub fn ending(&self) -> Option<LineEnding> {
         self.header
             .ending()
             .or_else(|| self.body.iter().find_map(Line::ending))
@@ -218,32 +208,25 @@ impl Section {
         }
 
         for section in sections.iter_mut() {
-            section.set_default_indent(&section.infer_line_indent())?;
-            section.set_default_ending(&section.infer_line_ending())?;
+            section.set_default_indent(section.infer_line_indent());
+            section.set_default_ending(section.infer_line_ending());
         }
         Ok((preamble, sections))
     }
 
-    pub(crate) fn infer_line_ending(&self) -> String {
-        self.ending().map_or_else(
-            || self.default_decor.ending().expect("always set").to_string(),
-            |t| t.to_string(),
-        )
+    pub(crate) fn infer_line_ending(&self) -> LineEnding {
+        self.ending().or_else(|| self.default_decor.ending()).unwrap_or_default()
     }
 
-    pub(crate) fn infer_line_indent(&self) -> String {
-        self.indent().map_or_else(
-            || self.default_decor.indent().expect("always set").to_string(),
-            |t| t.to_string(),
-        )
+    pub(crate) fn infer_line_indent(&self) -> Indent {
+        self.indent().or_else(|| self.default_decor.indent()).cloned().unwrap_or_default()
     }
 
-    pub(crate) fn terminate(&mut self, ending: &str) -> Result<()> {
-        self.header.set_ending_if_absent(ending)?;
+    pub(crate) fn terminate(&mut self, ending: LineEnding) {
+        self.header.set_ending_if_absent(ending);
         if let Some(last_line) = self.body.last_mut() {
-            last_line.set_ending_if_absent(ending)?;
+            last_line.set_ending_if_absent(ending);
         }
-        Ok(())
     }
 }
 
@@ -265,8 +248,7 @@ mod tests {
     fn field_line(key: &str, value: &str) -> Line {
         Line::directive(key, value)
             .unwrap()
-            .with_indent("\t")
-            .unwrap()
+            .with_indent(Indent::default())
     }
 
     #[test]
@@ -301,7 +283,7 @@ mod tests {
         let mut s = section_from("Host a");
         s.push(field_line("User", "x")).unwrap();
 
-        let ending = DEFAULT_LINE_ENDING;
+        let ending = LineEnding::default();
         assert_eq!(s.to_string(), format!("Host a{ending}\tUser x{ending}",));
     }
 
