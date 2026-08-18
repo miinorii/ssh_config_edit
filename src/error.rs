@@ -37,7 +37,6 @@ pub enum Error {
     },
     InvalidIndent(String),
     InvalidSeparator(String),
-    InvalidLineEnding(String),
     InvalidComment(String),
     InvalidKey(String),
     InvalidValue(String),
@@ -53,7 +52,6 @@ impl fmt::Display for Error {
         match self {
             Error::Parse { line, col, kind } => write!(f, "{kind} at ln:{line} col:{col}"),
             Error::InvalidIndent(s) => write!(f, "invalid indent: {s:?}"),
-            Error::InvalidLineEnding(s) => write!(f, "invalid line ending: {s:?}"),
             Error::InvalidSeparator(s) => write!(f, "invalid separator: {s:?}"),
             Error::InvalidComment(s) => write!(f, "invalid comment: {s:?}"),
             Error::InvalidKey(s) => write!(f, "invalid key: {s:?}"),
