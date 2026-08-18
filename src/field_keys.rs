@@ -455,4 +455,45 @@ mod tests {
         assert_eq!(FieldKey::Hostname.to_string(), "Hostname");
         assert_eq!(FieldKey::parse("hostname").to_string(), "Hostname");
     }
+
+    // A key containing whitespace or '=' would re-parse as a different key,
+    // since the lexer ends a key at the first of either. Rendering
+    // `Two Words x` and reading back `key="Two", value="Words x"` silently
+    // breaks the round-trip contract, so both are rejected at construction.
+
+    #[test]
+    fn rejects_key_with_inner_whitespace() {
+        assert!(FieldKey::new("Two Words").is_err());
+        assert!(FieldKey::new("Tab\tSeparated").is_err());
+        assert!(UnknownKey::new("Two Words").is_err());
+    }
+
+    #[test]
+    fn rejects_key_with_equals() {
+        assert!(FieldKey::new("a=b").is_err());
+        assert!(FieldKey::new("Port=").is_err());
+        assert!(UnknownKey::new("a=b").is_err());
+    }
+
+    #[test]
+    fn rejects_empty_key() {
+        assert!(FieldKey::new("").is_err());
+        assert!(UnknownKey::new("").is_err());
+    }
+
+    #[test]
+    fn rejects_key_with_newline() {
+        assert!(FieldKey::new("a\nb").is_err());
+        assert!(FieldKey::new("a\rb").is_err());
+    }
+
+    #[test]
+    fn accepts_known_and_unknown_valid_keys() {
+        assert_eq!(FieldKey::new("Port").unwrap(), FieldKey::Port);
+        assert_eq!(FieldKey::new("port").unwrap(), FieldKey::Port);
+        assert!(matches!(
+            FieldKey::new("MadeUpOption").unwrap(),
+            FieldKey::Other(_)
+        ));
+    }
 }
