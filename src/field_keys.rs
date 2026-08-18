@@ -9,16 +9,22 @@
 
 use std::fmt;
 use std::str::FromStr;
-use crate::error;
+use crate::error::{Error, Result};
+
+
+fn validate_key_str(s: &str) -> Result<()> {
+    if s.is_empty() || s.chars().any(|c| c.is_whitespace() || c == '=') {
+        return Err(Error::InvalidKey(s.into()));
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct UnknownKey(String);
 
 impl UnknownKey {
-    pub fn new(s: &str) -> error::Result<Self> {
-        if s.is_empty() || s.chars().any(|c| c.is_whitespace() || c == '=') {
-            return Err(error::Error::InvalidKey(s.into()));
-        }
+    pub fn new(s: &str) -> Result<Self> {
+        validate_key_str(s)?;
         Ok(Self(s.to_string()))
     }
 
@@ -138,7 +144,11 @@ pub enum FieldKey {
 }
 
 impl FieldKey {
-    pub fn parse(s: &str) -> Self {
+    /// Classify a keyword read from a config file.
+    ///
+    /// Infallible: an unrecognised keyword becomes [`FieldKey::Other`].
+    /// To build a key from user input use [`FieldKey::new`], which validates.
+    pub(crate) fn parse(s: &str) -> Self {
         match s.to_ascii_lowercase().as_str() {
             "host" => FieldKey::Host,
             "match" => FieldKey::Match,
@@ -241,7 +251,7 @@ impl FieldKey {
             "verifyhostkeydns" => FieldKey::VerifyHostKeyDNS,
             "visualhostkey" => FieldKey::VisualHostKey,
             "xauthlocation" => FieldKey::XAuthLocation,
-            _ => FieldKey::Other(UnknownKey(s.into())),
+            _ => FieldKey::Other(UnknownKey::from_lexer(s.to_string())),
         }
     }
 
@@ -383,6 +393,15 @@ impl FieldKey {
             FieldKey::Other(s) => s.as_str(),
         }
     }
+
+    /// Build a key from user input.
+    ///
+    /// # Errors
+    /// Returns [`Error::InvalidKey`] if `s` is empty or contains whitespace or `=`.
+    pub fn new(s: &str) -> Result<Self> {
+        validate_key_str(s)?;
+        Ok(Self::parse(s))
+    }
 }
 
 impl fmt::Display for FieldKey {
@@ -392,9 +411,9 @@ impl fmt::Display for FieldKey {
 }
 
 impl FromStr for FieldKey {
-    type Err = std::convert::Infallible;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(FieldKey::parse(s))
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self> {
+        FieldKey::new(s)
     }
 }
 
