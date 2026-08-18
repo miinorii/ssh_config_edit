@@ -85,11 +85,6 @@ impl Decor {
         }
     }
 
-    pub(crate) fn with_indent(mut self, indent: Indent) -> Self {
-        self.set_indent(indent);
-        self
-    }
-
     pub(crate) fn write_indent(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(indent) = self.indent() {
             write!(f, "{}", indent)?;
@@ -109,11 +104,6 @@ impl Decor {
         if self.ending.is_none() {
             self.set_ending(ending);
         }
-    }
-
-    pub(crate) fn with_ending(mut self, ending: LineEnding) -> Self {
-        self.set_ending(ending);
-        self
     }
 
     pub(crate) fn write_ending(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
