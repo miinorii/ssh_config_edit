@@ -1,8 +1,7 @@
-use crate::error::{Error, ParseErrorKind, Result};
 use crate::decor::LineEnding;
+use crate::error::{Error, ParseErrorKind, Result};
 use std::str::CharIndices;
 use std::{fmt, iter::Peekable};
-
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LexItem {
@@ -327,7 +326,10 @@ mod tests {
     fn parse_line_ending_crlflf() {
         assert_eq!(
             lex("\r\n\n"),
-            vec![LexItem::Ending(LineEnding::Crlf), LexItem::Ending(LineEnding::Lf),]
+            vec![
+                LexItem::Ending(LineEnding::Crlf),
+                LexItem::Ending(LineEnding::Lf),
+            ]
         );
     }
 
