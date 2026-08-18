@@ -23,7 +23,7 @@ impl SSHConfig {
     /// `ssh_config(5)` carrying the line and column of the offending character.
     pub fn parse(data: &str) -> Result<SSHConfig> {
         let lexer = Lexer::new(data);
-        let lines = Line::parse_lines(lexer.tokenize()?)?;
+        let lines = Line::parse_lines(lexer.tokenize()?);
         let (preamble, sections) = Section::parse_sections(lines)?;
         Ok(SSHConfig { preamble, sections })
     }
@@ -184,7 +184,7 @@ impl SSHConfig {
                     // Order matters because `push` appends, so it cannot invalidate the indices collected here.
                     to_remove.extend(entries[valid_count..].iter().map(|(i, _)| *i));
                     for field in &desired[valid_count..] {
-                        let line = Line::directive(key.as_canonical_str(), &field.value)?;
+                        let line = Line::directive(key.clone(), &field.value)?;
                         s.push(line)?;
                     }
                 }
@@ -211,7 +211,7 @@ impl SSHConfig {
                         // Line does not exist, create one and append it to the Section
                         None => {
                             let new_line =
-                                Line::directive(field.key.as_canonical_str(), &field.value)?;
+                                Line::directive(field.key.clone(), &field.value)?;
                             s.push(new_line)?;
                         }
                     }
@@ -230,12 +230,12 @@ impl SSHConfig {
             // Whole new section
             None => {
                 let header =
-                    Selector::new(FieldKey::Host.as_canonical_str(), host_settings.host())?
+                    Selector::new(FieldKey::Host, host_settings.host())?
                         .with_ending(inferred_line_ending);
 
                 let mut new_section = Section::new(header).with_ending(inferred_line_ending);
                 for field in host_settings.fields() {
-                    let param = Line::directive(field.key.as_canonical_str(), &field.value)?;
+                    let param = Line::directive(field.key.clone(), &field.value)?;
                     new_section.push(param)?;
                 }
                 self.insert_section(0, new_section);
