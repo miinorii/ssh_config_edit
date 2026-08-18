@@ -62,10 +62,7 @@ pub(crate) struct Decor {
 
 impl Decor {
     pub(crate) fn new() -> Self {
-        Self {
-            indent: None,
-            ending: None,
-        }
+        Self::default()
     }
 
     pub(crate) fn indent(&self) -> Option<&Indent> {
