@@ -43,7 +43,6 @@ pub enum Error {
     NotASelector(String),
     UnexpectedSelector(String),
     NotCumulative(String),
-    EmptyKey,
     EmptyValue,
 }
 
@@ -61,7 +60,6 @@ impl fmt::Display for Error {
             Error::NotCumulative(s) => {
                 write!(f, "FieldKey already exist and is not cumulative: {s:?}")
             }
-            Error::EmptyKey => write!(f, "empty key"),
             Error::EmptyValue => write!(f, "empty value"),
         }
     }
