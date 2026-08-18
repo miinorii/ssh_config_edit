@@ -210,8 +210,7 @@ impl SSHConfig {
 
                         // Line does not exist, create one and append it to the Section
                         None => {
-                            let new_line =
-                                Line::directive(field.key.clone(), &field.value)?;
+                            let new_line = Line::directive(field.key.clone(), &field.value)?;
                             s.push(new_line)?;
                         }
                     }
@@ -229,9 +228,8 @@ impl SSHConfig {
 
             // Whole new section
             None => {
-                let header =
-                    Selector::new(FieldKey::Host, host_settings.host())?
-                        .with_ending(inferred_line_ending);
+                let header = Selector::new(FieldKey::Host, host_settings.host())?
+                    .with_ending(inferred_line_ending);
 
                 let mut new_section = Section::new(header).with_ending(inferred_line_ending);
                 for field in host_settings.fields() {
