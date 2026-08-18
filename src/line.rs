@@ -525,13 +525,6 @@ mod tests {
         Directive::new("User", "x").unwrap()
     }
 
-    fn sample_line() -> Line {
-        Line {
-            decor: Decor::default(),
-            kind: LineKind::Directive(sample_directive()),
-        }
-    }
-
     #[test]
     fn with_sep_accepts_valid_forms() {
         assert!(sample_directive().with_separator(" ").is_ok());
