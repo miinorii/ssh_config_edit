@@ -9,12 +9,18 @@ pub enum LineEnding {
     Crlf,
 }
 
+impl LineEnding {
+    pub fn as_str(&self) -> &str {
+        match self {
+            LineEnding::Lf => "\n",
+            LineEnding::Crlf => "\r\n",
+        }
+    }
+}
+
 impl fmt::Display for LineEnding {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LineEnding::Lf => write!(f, "\n"),
-            LineEnding::Crlf => write!(f, "\r\n"),
-        }
+        f.write_str(self.as_str())
     }
 }
 
@@ -50,7 +56,7 @@ impl Default for Indent {
 
 impl fmt::Display for Indent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
+        f.write_str(self.as_str())
     }
 }
 
