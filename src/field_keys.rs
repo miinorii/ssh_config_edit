@@ -9,6 +9,27 @@
 
 use std::fmt;
 use std::str::FromStr;
+use crate::error;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct UnknownKey(String);
+
+impl UnknownKey {
+    pub fn new(s: &str) -> error::Result<Self> {
+        if s.is_empty() || s.chars().any(|c| c.is_whitespace() || c == '=') {
+            return Err(error::Error::InvalidKey(s.into()));
+        }
+        Ok(Self(s.to_string()))
+    }
+
+    pub(crate) fn from_lexer(s: String) -> Self {
+        Self(s)
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FieldKey {
@@ -113,7 +134,7 @@ pub enum FieldKey {
     VerifyHostKeyDNS,
     VisualHostKey,
     XAuthLocation,
-    Other(String),
+    Other(UnknownKey),
 }
 
 impl FieldKey {
@@ -220,7 +241,7 @@ impl FieldKey {
             "verifyhostkeydns" => FieldKey::VerifyHostKeyDNS,
             "visualhostkey" => FieldKey::VisualHostKey,
             "xauthlocation" => FieldKey::XAuthLocation,
-            _ => FieldKey::Other(s.to_string()),
+            _ => FieldKey::Other(UnknownKey(s.into())),
         }
     }
 
@@ -359,7 +380,7 @@ impl FieldKey {
             FieldKey::VerifyHostKeyDNS => "VerifyHostKeyDNS",
             FieldKey::VisualHostKey => "VisualHostKey",
             FieldKey::XAuthLocation => "XAuthLocation",
-            FieldKey::Other(s) => s,
+            FieldKey::Other(s) => s.as_str(),
         }
     }
 }
@@ -398,7 +419,7 @@ mod tests {
     fn unknown_becomes_other() {
         assert_eq!(
             FieldKey::parse("MadeUpOption"),
-            FieldKey::Other("MadeUpOption".to_string())
+            FieldKey::Other(UnknownKey::new("MadeUpOption").unwrap())
         );
         assert_ne!(FieldKey::parse("a"), FieldKey::parse("A"));
     }
