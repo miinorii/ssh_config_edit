@@ -240,7 +240,7 @@ mod tests {
     use crate::lexer::Lexer;
 
     fn parse(data: &str) -> (Vec<Line>, Vec<Section>) {
-        let lines = Line::parse_lines(Lexer::new(data).tokenize().unwrap()).unwrap();
+        let lines = Line::parse_lines(Lexer::new(data).tokenize().unwrap());
         Section::parse_sections(lines).unwrap()
     }
 
@@ -249,11 +249,6 @@ mod tests {
         sections.remove(0)
     }
 
-    fn field_line(key: &str, value: &str) -> Line {
-        Line::directive(key, value)
-            .unwrap()
-            .with_indent(Indent::default())
-    }
 
     #[test]
     fn preamble_collects_lines_before_first_section() {
@@ -285,7 +280,10 @@ mod tests {
     #[test]
     fn push_line_terminates_unterminated_header() {
         let mut s = section_from("Host a");
-        s.push(field_line("User", "x")).unwrap();
+        let line = Line::directive(FieldKey::User, "x")
+            .unwrap()
+            .with_indent(Indent::default());
+        s.push(line).unwrap();
 
         let ending = LineEnding::default();
         assert_eq!(s.to_string(), format!("Host a{ending}\tUser x{ending}",));
@@ -294,7 +292,10 @@ mod tests {
     #[test]
     fn push_line_terminates_unterminated_last_body_line() {
         let mut s = section_from("Host a\n\tUser x");
-        s.push(field_line("Hostname", "1.2.3.4")).unwrap();
+        let line = Line::directive(FieldKey::Hostname, "1.2.3.4")
+            .unwrap()
+            .with_indent(Indent::default());
+        s.push(line).unwrap();
         assert_eq!(s.to_string(), "Host a\n\tUser x\n\tHostname 1.2.3.4\n");
     }
 }
