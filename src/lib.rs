@@ -13,7 +13,7 @@
 //! # fn main() -> Result<(), ssh_config_edit::Error> {
 //! let mut config = SSHConfig::parse("Host dev\n\tUser me\n")?;
 //!
-//! let mut settings = config.exact_host_settings("dev");
+//! let mut settings = config.raw_host_settings("dev").expect("dev is declared");
 //! settings.replace(FieldKey::Port, "2222")?;
 //! config.set_host_settings(&settings)?;
 //!

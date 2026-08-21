@@ -251,16 +251,18 @@ impl SSHConfig {
     ///
     /// An unknown `host` yields an empty [`HostSettings`], which is
     /// indistinguishable from a section that declares nothing.
-    pub fn exact_host_settings(&self, host: &str) -> HostSettings {
+    pub fn raw_host_settings(&self, host: &str) -> Option<HostSettings> {
         let mut settings = HostSettings::new(host);
 
-        let section = self.section(host);
-        if let Some(s) = section {
-            for d in s.directives() {
-                settings.push_dedup(d.field_key(), d.value());
-            }
+        match self.section(host) {
+            Some(s) => {
+                for d in s.directives() {
+                    settings.push_dedup(d.field_key(), d.value());
+                }
+                Some(settings)
+            },
+            None => None
         }
-        settings
     }
 
     /// Resolve the settings for a given `host`, mimicking `ssh -G` behaviour.
@@ -300,7 +302,7 @@ Host my.server.local
 ";
 
         let config = SSHConfig::parse(data).unwrap();
-        let host_params = config.exact_host_settings("my.server.local");
+        let host_params = config.raw_host_settings("my.server.local").unwrap();
         assert_eq!(host_params.field_count(), 1);
 
         assert!(host_params.contains_key(&FieldKey::Hostname));
@@ -319,7 +321,7 @@ Host my.server.local
 ";
 
         let config = SSHConfig::parse(data).unwrap();
-        let host_params = config.exact_host_settings("my.server.local");
+        let host_params = config.raw_host_settings("my.server.local").unwrap();
         assert_eq!(host_params.field_count(), 2);
         assert!(host_params.contains_key(&FieldKey::Hostname));
         assert_eq!(
@@ -339,7 +341,7 @@ Host my.server.local
 ";
 
         let config = SSHConfig::parse(data).unwrap();
-        let host_params = config.exact_host_settings("my.server.local");
+        let host_params = config.raw_host_settings("my.server.local").unwrap();
         assert_eq!(host_params.field_count(), 1);
         assert!(host_params.contains_key(&FieldKey::User));
         assert_eq!(host_params.get_one(&FieldKey::User).unwrap().value, "first");
@@ -354,7 +356,7 @@ Host my.server.local
 ";
 
         let config = SSHConfig::parse(data).unwrap();
-        let host_params = config.exact_host_settings("my.server.local");
+        let host_params = config.raw_host_settings("my.server.local").unwrap();
         let cumulative_params: Vec<&Field> = host_params.get_all(&FieldKey::IdentityFile).collect();
         assert_eq!(cumulative_params.len(), 2);
         assert_eq!(cumulative_params[0].value, "~/.ssh/fake_key1");
@@ -365,7 +367,7 @@ Host my.server.local
     fn match_options_do_not_leak_into_host() {
         let data = "Host a\n\tUser x\nMatch user foo\n\tPort 22\n";
         let config = SSHConfig::parse(data).unwrap();
-        let settings = config.exact_host_settings("a");
+        let settings = config.raw_host_settings("a").unwrap();
         assert_eq!(settings.field_count(), 1);
         assert!(!settings.contains_key(&FieldKey::Port));
     }
@@ -377,9 +379,9 @@ Host my.server.local
         new_host.push_dedup(FieldKey::Hostname, "1.2.3.4");
         config.set_host_settings(&new_host).unwrap();
 
-        let a = config.exact_host_settings("a");
+        let a = config.raw_host_settings("a").unwrap();
         assert_eq!(a.get_one(&FieldKey::Hostname).unwrap().value, "1.2.3.4");
-        let b = config.exact_host_settings("b"); // existing host untouched
+        let b = config.raw_host_settings("b").unwrap(); // existing host untouched
         assert_eq!(b.get_one(&FieldKey::User).unwrap().value, "bob");
     }
 
@@ -391,7 +393,7 @@ Host my.server.local
         config.set_host_settings(&new_host).unwrap();
         assert_eq!(
             config
-                .exact_host_settings("a")
+                .raw_host_settings("a").unwrap()
                 .get_one(&FieldKey::User)
                 .unwrap()
                 .value,
@@ -509,7 +511,7 @@ Host my.server.local
     #[test]
     fn set_append_key_matching_section_style() {
         let mut config = SSHConfig::parse("Host a\r\n    User x\r\n").unwrap();
-        let mut settings = config.exact_host_settings("a");
+        let mut settings = config.raw_host_settings("a").unwrap();
         settings.push_dedup(FieldKey::Hostname, "1.2.3.4");
         config.set_host_settings(&settings).unwrap();
 
