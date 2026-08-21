@@ -23,8 +23,7 @@ impl SSHConfig {
     /// `ssh_config(5)` carrying the line and column of the offending character.
     pub fn parse(data: &str) -> Result<SSHConfig> {
         let lexer = Lexer::new(data);
-        let lines = Line::parse_lines(lexer.tokenize()?);
-        let (preamble, sections) = Section::parse_sections(lines)?;
+        let (preamble, sections) = Section::parse_sections(lexer.tokenize()?);
         Ok(SSHConfig { preamble, sections })
     }
 
@@ -185,7 +184,7 @@ impl SSHConfig {
                     to_remove.extend(entries[valid_count..].iter().map(|(i, _)| *i));
                     for field in &desired[valid_count..] {
                         let line = Line::directive(key.clone(), &field.value)?;
-                        s.push(line)?;
+                        s.push(line);
                     }
                 }
 
@@ -211,7 +210,7 @@ impl SSHConfig {
                         // Line does not exist, create one and append it to the Section
                         None => {
                             let new_line = Line::directive(field.key.clone(), &field.value)?;
-                            s.push(new_line)?;
+                            s.push(new_line);
                         }
                     }
                 }
@@ -234,7 +233,7 @@ impl SSHConfig {
                 let mut new_section = Section::new(header).with_ending(inferred_line_ending);
                 for field in host_settings.fields() {
                     let param = Line::directive(field.key.clone(), &field.value)?;
-                    new_section.push(param)?;
+                    new_section.push(param);
                 }
                 self.insert_section(0, new_section);
             }

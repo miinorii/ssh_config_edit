@@ -35,7 +35,7 @@
 //! if let Some(port) = section.get_one_mut(&FieldKey::Port) {
 //!     port.set_value("2222")?;
 //! }
-//! section.push(Line::comment("tuned")?)?;
+//! section.push(Line::comment("tuned")?);
 //!
 //! // the '=' separator, the 4 space indent and the comment all survive
 //! assert_eq!(
@@ -49,9 +49,9 @@
 //! let mut prod = Section::new(Selector::new(FieldKey::Host, "prod")?)
 //!     .with_indent(Indent::new("    ")?)
 //!     .with_ending(LineEnding::Lf);
-//! prod.push(Line::directive(FieldKey::Hostname, "10.0.0.1")?)?;
-//! prod.push(Line::comment("gateway")?)?;
-//! prod.push(Line::blank())?;
+//! prod.push(Line::directive(FieldKey::Hostname, "10.0.0.1")?);
+//! prod.push(Line::comment("gateway")?);
+//! prod.push(Line::blank());
 //! config.push_section(prod);
 //!
 //! assert_eq!(
