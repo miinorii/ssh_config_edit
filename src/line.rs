@@ -25,6 +25,82 @@ fn validate_value(value: &str) -> Result<()> {
     Ok(())
 }
 
+pub(crate) enum ParsedLine {
+    Selector(Selector),
+    Other(Line),
+}
+
+impl ParsedLine {
+    /// Parse multiple [`ParsedLine`] from a `Vec<LexItem>`.
+    #[cfg(test)]
+    pub(crate) fn parse_lines(items: Vec<LexItem>) -> Vec<Self> {
+        let mut iter = items.into_iter().peekable();
+        let mut lines: Vec<Self> = Vec::new();
+        while iter.peek().is_some() {
+            lines.push(Self::parse_line(&mut iter));
+        }
+        lines
+    }
+
+    /// Parse the next line from the LexItem stream.
+    ///
+    /// Assume each line can either be one of the following pattern:
+    ///
+    /// - `[Indent], Comment, [Ending]`
+    /// - `[Indent], Directive, [Ending]`
+    /// - `[Indent], [Ending]`
+    ///
+    /// Optional token are denoted with `[]`
+    pub(crate) fn parse_line(iter: &mut Peekable<vec::IntoIter<LexItem>>) -> ParsedLine {
+        let indent = iter
+            .next_if(|i| matches!(i, LexItem::Indent(_)))
+            .and_then(LexItem::into_indent);
+
+        // an Ending here means the line has no content
+        let content = iter.next_if(|i| !matches!(i, LexItem::Ending(_)));
+
+        let ending = iter
+            .next_if(|i| matches!(i, LexItem::Ending(_)))
+            .and_then(LexItem::into_ending);
+
+        let mut decor = Decor::new();
+        if let Some(ending) = ending {
+            decor.set_ending(ending);
+        }
+        if let Some(indent) = indent {
+            decor.set_indent(Indent::from_lexer(indent));
+        }
+
+        match content {
+            Some(LexItem::Directive { key, sep, value }) if FieldKey::parse(&key).is_selector() => {
+                ParsedLine::Selector(Selector::from_parts(decor, key, sep, value))
+            }
+            Some(LexItem::Directive { key, sep, value }) => ParsedLine::Other(Line {
+                decor,
+                kind: LineKind::Directive(Directive::from_parts(key, sep, value)),
+            }),
+            Some(LexItem::Comment(text)) => ParsedLine::Other(Line {
+                decor,
+                kind: LineKind::Comment(text),
+            }),
+            None => ParsedLine::Other(Line {
+                decor,
+                kind: LineKind::Blank,
+            }),
+            Some(LexItem::Indent(_) | LexItem::Ending(_)) => unreachable!(),
+        }
+    }
+}
+
+impl fmt::Display for ParsedLine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParsedLine::Selector(s) => write!(f, "{}", s),
+            ParsedLine::Other(l) => write!(f, "{}", l),
+        }
+    }
+}
+
 #[derive(PartialEq)]
 pub struct Directive {
     key: String,
@@ -44,6 +120,11 @@ impl Directive {
     ///     Port 12345 <- Port Directive
     /// ```
     pub fn new(key: FieldKey, value: &str) -> Result<Self> {
+        if key.is_selector() {
+            return Err(Error::UnexpectedSelector(
+                key.as_canonical_str().to_string(),
+            ));
+        }
         validate_value(value)?;
 
         Ok(Self {
@@ -139,6 +220,16 @@ impl Selector {
         })
     }
 
+    /// Construct a new [`Selector`] by consuming a given `decor`, `key`, `sep` and `value`.
+    pub(crate) fn from_parts(decor: Decor, key: String, sep: String, value: String) -> Self {
+        Self {
+            decor,
+            key,
+            sep,
+            value,
+        }
+    }
+
     pub fn indent(&self) -> Option<&Indent> {
         self.decor.indent()
     }
@@ -213,22 +304,6 @@ impl Selector {
     }
 }
 
-impl TryFrom<Line> for Selector {
-    type Error = Error;
-
-    fn try_from(line: Line) -> Result<Self> {
-        let Line { decor, kind } = line;
-        match kind {
-            LineKind::Directive(d) if d.is_selector() => Ok(Self {
-                decor,
-                key: d.key,
-                sep: d.sep,
-                value: d.value,
-            }),
-            other => Err(Error::NotASelector(Line { decor, kind: other }.to_string())),
-        }
-    }
-}
 
 impl fmt::Display for Selector {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -319,55 +394,6 @@ impl Line {
             decor: Decor::default(),
             kind: LineKind::Blank,
         }
-    }
-
-    /// Parse multiple [`Line`] from a `Vec<LexItem>`.
-    pub(crate) fn parse_lines(items: Vec<LexItem>) -> Vec<Self> {
-        let mut iter = items.into_iter().peekable();
-        let mut lines: Vec<Self> = Vec::new();
-        while iter.peek().is_some() {
-            lines.push(Self::parse_line(&mut iter));
-        }
-        lines
-    }
-
-    /// Parse the next line from the LexItem stream.
-    ///
-    /// Assume each line can either be one of the following pattern:
-    ///
-    /// - `[Indent], Comment, [Ending]`
-    /// - `[Indent], Directive, [Ending]`
-    /// - `[Indent], [Ending]`
-    ///
-    /// Optional token are denoted with `[]`
-    fn parse_line(iter: &mut Peekable<vec::IntoIter<LexItem>>) -> Line {
-        let indent = iter
-            .next_if(|i| matches!(i, LexItem::Indent(_)))
-            .and_then(LexItem::into_indent);
-
-        // an Ending here means the line has no content
-        let kind = match iter.next_if(|i| !matches!(i, LexItem::Ending(_))) {
-            Some(LexItem::Comment(text)) => LineKind::Comment(text),
-            Some(LexItem::Directive { key, sep, value }) => {
-                LineKind::Directive(Directive::from_parts(key, sep, value))
-            }
-            Some(LexItem::Indent(_)) => unreachable!("indent already checked"),
-            Some(LexItem::Ending(_)) => unreachable!("excluded by next_if"),
-            None => LineKind::Blank,
-        };
-
-        let ending = iter
-            .next_if(|i| matches!(i, LexItem::Ending(_)))
-            .and_then(LexItem::into_ending);
-
-        let mut decor = Decor::new();
-        if let Some(ending) = ending {
-            decor.set_ending(ending);
-        }
-        if let Some(indent) = indent {
-            decor.set_indent(Indent::from_lexer(indent));
-        }
-        Line { decor: decor, kind }
     }
 
     pub fn indent(&self) -> Option<&Indent> {
@@ -466,7 +492,7 @@ mod tests {
     use crate::lexer::Lexer;
 
     fn roundtrip(data: &str) -> String {
-        let lines = Line::parse_lines(Lexer::new(data).tokenize().unwrap());
+        let lines = ParsedLine::parse_lines(Lexer::new(data).tokenize().unwrap());
         lines.iter().map(|l| l.to_string()).collect()
     }
 
