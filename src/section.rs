@@ -1,17 +1,8 @@
 use crate::decor::{Decor, Indent, LineEnding};
-use crate::error::{Error, Result};
 use crate::field_keys::FieldKey;
-use crate::line::{Directive, Line, LineKind, Selector};
+use crate::lexer::LexItem;
+use crate::line::{Directive, Line, ParsedLine, Selector};
 use std::fmt;
-
-fn valid_newline(line: &Line) -> Result<()> {
-    match line.kind() {
-        LineKind::Directive(d) if d.is_selector() => {
-            Err(Error::UnexpectedSelector(line.to_string()))
-        }
-        _ => Ok(()),
-    }
-}
 
 pub struct Section {
     header: Selector,
@@ -38,6 +29,29 @@ impl Section {
             body: Vec::new(),
             default_decor: decor,
         }
+    }
+
+    pub(crate) fn parse_sections(items: Vec<LexItem>) -> (Vec<Line>, Vec<Section>) {
+        let mut iter = items.into_iter().peekable();
+        let mut preamble = Vec::new();
+        let mut sections: Vec<Section> = Vec::new();
+
+        while iter.peek().is_some() {
+            match ParsedLine::parse_line(&mut iter) {
+                ParsedLine::Selector(sel) => sections.push(Section::new(sel)),
+                ParsedLine::Other(line) => match sections.last_mut() {
+                    Some(s) => s.body.push(line),
+                    None => preamble.push(line),
+                },
+            }
+        }
+
+        for section in sections.iter_mut() {
+            section.set_default_indent(section.infer_line_indent());
+            section.set_default_ending(section.infer_line_ending());
+        }
+
+        (preamble, sections)
     }
 
     /// Set default indent.
@@ -119,15 +133,14 @@ impl Section {
     }
 
     /// Append `line` and add a line terminator to the previous header/line if none is set.
-    pub fn push(&mut self, line: Line) -> Result<()> {
+    pub fn push(&mut self, line: Line) {
         self.insert(self.line_count(), line)
     }
 
     /// Insert `line` at `index` and add a line terminator to the previous header/line if none is set.
     /// # Panics
     /// Panics if `index` is greater than [`Self::line_count`].
-    pub fn insert(&mut self, index: usize, mut line: Line) -> Result<()> {
-        valid_newline(&line)?;
+    pub fn insert(&mut self, index: usize, mut line: Line) {
         let line_ending = self.infer_line_ending();
         let line_indent = self.infer_line_indent();
 
@@ -140,7 +153,6 @@ impl Section {
         line.set_ending_if_absent(line_ending);
 
         self.body.insert(index, line);
-        Ok(())
     }
 
     /// Remove the [`Line`] at `index`.
@@ -189,30 +201,6 @@ impl Section {
             .or_else(|| self.body.iter().find_map(Line::ending))
     }
 
-    pub(crate) fn parse_sections(lines: Vec<Line>) -> Result<(Vec<Line>, Vec<Section>)> {
-        let mut preamble: Vec<Line> = Vec::new();
-        let mut sections: Vec<Section> = Vec::new();
-
-        for line in lines {
-            match line.kind() {
-                LineKind::Directive(d) if d.field_key().is_selector() => {
-                    let selector: Selector = line.try_into()?;
-                    sections.push(Section::new(selector));
-                }
-                _ => match sections.last_mut() {
-                    Some(section) => section.body.push(line),
-                    None => preamble.push(line),
-                },
-            }
-        }
-
-        for section in sections.iter_mut() {
-            section.set_default_indent(section.infer_line_indent());
-            section.set_default_ending(section.infer_line_ending());
-        }
-        Ok((preamble, sections))
-    }
-
     pub(crate) fn infer_line_ending(&self) -> LineEnding {
         self.ending()
             .or_else(|| self.default_decor.ending())
@@ -240,8 +228,7 @@ mod tests {
     use crate::lexer::Lexer;
 
     fn parse(data: &str) -> (Vec<Line>, Vec<Section>) {
-        let lines = Line::parse_lines(Lexer::new(data).tokenize().unwrap());
-        Section::parse_sections(lines).unwrap()
+        Section::parse_sections(Lexer::new(data).tokenize().unwrap())
     }
 
     fn section_from(data: &str) -> Section {
@@ -282,7 +269,7 @@ mod tests {
         let line = Line::directive(FieldKey::User, "x")
             .unwrap()
             .with_indent(Indent::default());
-        s.push(line).unwrap();
+        s.push(line);
 
         let ending = LineEnding::default();
         assert_eq!(s.to_string(), format!("Host a{ending}\tUser x{ending}",));
@@ -294,7 +281,7 @@ mod tests {
         let line = Line::directive(FieldKey::Hostname, "1.2.3.4")
             .unwrap()
             .with_indent(Indent::default());
-        s.push(line).unwrap();
+        s.push(line);
         assert_eq!(s.to_string(), "Host a\n\tUser x\n\tHostname 1.2.3.4\n");
     }
 }
